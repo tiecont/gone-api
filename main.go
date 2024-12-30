@@ -3,6 +3,7 @@ package main
 import (
 	"gone-be/config"
 	model "gone-be/models"
+	"gone-be/routes"
 	"log"
 	"os"
 
@@ -24,7 +25,7 @@ func main() {
 	r.GET("/", func(c *gin.Context) {
 		c.JSON(200, gin.H{"message": "Welcome to Gin-Gonic API!"})
 	})
-
+	routes.RegisterRoutes(r)
 	// Khởi chạy server
 	port := os.Getenv("APP_PORT")
 	if port == "" {

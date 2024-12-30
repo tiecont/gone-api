@@ -22,7 +22,7 @@ services:
     container_name: Gone
     restart: always
     ports:
-      - "${APP_PORT}:8080"
+      - "${APP_PORT}:2000"
     environment:
       - DB_USER=${DB_USER}
       - DB_PASS=${DB_PASS}
