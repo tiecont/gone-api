@@ -1,10 +1,10 @@
 package main
 
 import (
+	"gone-be/config"
+	model "gone-be/models"
 	"log"
 	"os"
-
-	"gone-be/config"
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
@@ -15,8 +15,8 @@ func main() {
 	_ = godotenv.Load()
 
 	// Kết nối cơ sở dữ liệu
-	config.ConnectDatabase()
-
+	db := config.ConnectDatabase()
+	model.MigrateUser(db)
 	// Khởi tạo router
 	r := gin.Default()
 
