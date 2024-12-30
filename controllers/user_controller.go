@@ -10,11 +10,20 @@ import (
 )
 
 func GetUsers(c *gin.Context) {
-	// Trả về danh sách người dùng (giả sử đây là dữ liệu mẫu)
-	users := []map[string]string{
-		{"id": "1", "name": "John Doe"},
-		{"id": "2", "name": "Jane Doe"},
+	// Connect to the database (assuming config.DB is your global DB connection)
+	db := config.DB
+
+	// Declare a slice to hold users
+	var users []model.User
+
+	// Fetch all users from the database using GORM's Find method
+	if err := db.Find(&users).Error; err != nil {
+		// If there's an error fetching users, respond with an error message
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch users from the database"})
+		return
 	}
+
+	// Respond with the list of users
 	c.JSON(http.StatusOK, users)
 }
 
