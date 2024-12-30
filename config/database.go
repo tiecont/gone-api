@@ -11,7 +11,7 @@ import (
 
 var DB *gorm.DB
 
-func ConnectDatabase() {
+func ConnectDatabase() *gorm.DB {
 	// Lấy thông tin kết nối từ biến môi trường
 	dbUser := os.Getenv("DB_USER")
 	dbPass := os.Getenv("DB_PASS")
@@ -33,4 +33,5 @@ func ConnectDatabase() {
 	DB = database
 
 	fmt.Println("Kết nối cơ sở dữ liệu thành công!")
+	return DB
 }
