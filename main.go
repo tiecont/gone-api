@@ -1,17 +1,35 @@
 package main
 
 import (
-	"gone-be/routes"
+	"log"
+	"os"
+
+	"gone-be/config"
 
 	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 )
 
 func main() {
+	// Tải biến môi trường từ .env
+	_ = godotenv.Load()
+
+	// Kết nối cơ sở dữ liệu
+	config.ConnectDatabase()
+
+	// Khởi tạo router
 	r := gin.Default()
 
-	// Đăng ký routes
-	routes.RegisterRoutes(r)
+	// Định tuyến (ví dụ)
+	r.GET("/", func(c *gin.Context) {
+		c.JSON(200, gin.H{"message": "Welcome to Gin-Gonic API!"})
+	})
 
-	// Chạy server trên cổng 8080
-	r.Run(":3000")
+	// Khởi chạy server
+	port := os.Getenv("APP_PORT")
+	if port == "" {
+		port = "8080"
+	}
+	log.Printf("Server is running on port %s", port)
+	r.Run(":" + port)
 }
