@@ -21,21 +21,38 @@ func GetUsers(c *gin.Context) {
 }
 
 func CreateUser(c *gin.Context) {
-	var user model.User
-
-	// Nhận dữ liệu từ request và gửi đến service
-	if err := c.ShouldBindJSON(&user); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
+	// Step 1: Parse JSON request body into `user_data`
+	var userData model.User
+	if err := c.ShouldBindJSON(&userData); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status": gin.H{
+				"code":    http.StatusBadRequest,
+				"message": "Invalid input",
+			},
+			"error": err.Error(),
+		})
 		return
 	}
 
-	// Gửi dữ liệu đến service để xử lý
-	response, err := services.HandleCreateUser(user)
+	// Step 2: Call the service layer to handle user creation
+	response, err := services.HandleCreateUser(userData)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status": gin.H{
+				"code":    http.StatusInternalServerError,
+				"message": "Failed to create user",
+			},
+			"error": err.Error(),
+		})
 		return
 	}
 
-	// Trả về response từ service
-	c.JSON(http.StatusCreated, response)
+	// Step 3: Return a success response
+	c.JSON(http.StatusCreated, gin.H{
+		"status": gin.H{
+			"code":    http.StatusCreated,
+			"message": "User has been created successfully",
+		},
+		"data": response,
+	})
 }

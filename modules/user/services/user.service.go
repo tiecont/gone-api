@@ -4,7 +4,7 @@ import (
 	"errors"
 	"gone-be/config"
 	model "gone-be/modules/user/models"
-
+	"fmt"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -20,31 +20,36 @@ func GetAllUsers() ([]model.User, error) {
 	return users, nil
 }
 
+// HandleCreateUser handles the logic for creating a new user.
 func HandleCreateUser(user model.User) (model.User, error) {
 	db := config.DB
 
-	// Kiểm tra dữ liệu đầu vào
+	// Step 1: Validate input data
 	if user.Username == "" || user.Email == "" || user.Password == "" {
-		return model.User{}, errors.New("all fields are required")
+		return model.User{}, errors.New("all fields (Username, Email, Password) are required")
 	}
 
-	// Kiểm tra email đã tồn tại
+	// Step 2: Check if the email already exists in the database
 	var existingUser model.User
 	if err := db.Where("email = ?", user.Email).First(&existingUser).Error; err == nil {
-		return model.User{}, errors.New("email already in use")
+		// Email already exists
+		return model.User{}, errors.New("email is already in use")
 	}
 
-	// Hash mật khẩu
+	// Step 3: Hash the password before storing it
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
 	if err != nil {
+		// Error occurred during password hashing
 		return model.User{}, errors.New("failed to hash password")
 	}
 	user.Password = string(hashedPassword)
 
-	// Tạo người dùng mới trong cơ sở dữ liệu
+	// Step 4: Create the new user in the database
 	if err := db.Create(&user).Error; err != nil {
-		return model.User{}, errors.New("failed to create user")
+		// Error occurred while creating user in the database, formatted with err.Error()
+		return model.User{}, fmt.Errorf("failed to create user: %v", err.Error())
 	}
 
+	// Step 5: Return the created user
 	return user, nil
 }
