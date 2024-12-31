@@ -1,7 +1,7 @@
 package routes
 
 import (
-	"gone-be/controllers"
+	"gone-be/modules/user/controllers"
 
 	"github.com/gin-gonic/gin"
 )

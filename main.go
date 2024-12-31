@@ -2,7 +2,7 @@ package main
 
 import (
 	"gone-be/config"
-	model "gone-be/models"
+	model "gone-be/modules/user/models"
 	"gone-be/routes"
 	"log"
 	"os"
