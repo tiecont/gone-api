@@ -2,16 +2,77 @@ package main
 
 import (
 	"log"
+	"net/http"
 	"os"
 	"time"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-	socketio "github.com/googollee/go-socket.io"
+	"github.com/gorilla/websocket"
 	"github.com/joho/godotenv"
 	"gone-be/config"
 	"gone-be/routes"
 )
+
+var upgrader = websocket.Upgrader{
+	ReadBufferSize:  1024,
+	WriteBufferSize: 1024,
+	CheckOrigin: func(r *http.Request) bool {
+		// Allow connections from any origin (adjust for production)
+		return true
+	},
+}
+
+func websocketHandler(c *gin.Context) {
+	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
+	if err != nil {
+		log.Printf("Failed to upgrade WebSocket connection: %v", err)
+		return
+	}
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Failed to close WebSocket connection: %v", err)
+		}
+	}()
+
+	log.Println("WebSocket client connected:", conn.RemoteAddr())
+
+	for {
+		// Read message from client
+		messageType, message, err := conn.ReadMessage()
+		if err != nil {
+			log.Printf("Error reading message: %v", err)
+			break
+		}
+
+		log.Printf("Received: %s", string(message))
+
+		// Handle different events
+		switch string(message) {
+		case "notice":
+			response := "Received: " + string(message)
+			if err := conn.WriteMessage(messageType, []byte(response)); err != nil {
+				log.Printf("Error writing message: %v", err)
+				break
+			}
+		case "bye":
+			response := "Disconnected: " + string(message)
+			if err := conn.WriteMessage(messageType, []byte(response)); err != nil {
+				log.Printf("Error writing message: %v", err)
+				break
+			}
+			break
+		default:
+			response := "Echo: " + string(message)
+			if err := conn.WriteMessage(messageType, []byte(response)); err != nil {
+				log.Printf("Error writing message: %v", err)
+				break
+			}
+		}
+	}
+
+	log.Println("WebSocket client disconnected:", conn.RemoteAddr())
+}
 
 func main() {
 	// Load environment variables from .env file
@@ -24,7 +85,7 @@ func main() {
 
 	// Enable CORS
 	router.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"http://localhost:3001"},
+		AllowOrigins:     []string{"*"},
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"*"},
 		ExposeHeaders:    []string{"*"},
@@ -32,60 +93,8 @@ func main() {
 		MaxAge:           12 * time.Hour,
 	}))
 
-	// Setup Socket.IO server
-	server := socketio.NewServer(nil)
-
-	// Socket.IO events
-	server.OnConnect("/", func(s socketio.Conn) error {
-		log.Println("Client connected, ID:", s.ID())
-		s.Emit("heartbeat", "Connection established") // Emit initial connection message
-		return nil
-	})
-
-	server.OnEvent("/", "notice", func(s socketio.Conn, msg string) {
-		log.Println("Notice event received:", msg)
-		s.Emit("reply", "Received: "+msg)
-	})
-
-	server.OnEvent("/chat", "msg", func(s socketio.Conn, msg string) string {
-		log.Println("Chat message received:", msg)
-		s.SetContext(msg) // Store context if needed
-		return "Message received: " + msg
-	})
-
-	server.OnEvent("/", "bye", func(s socketio.Conn) string {
-		log.Println("Bye event received")
-		var lastMsg string
-		if s.Context() != nil {
-			lastMsg = s.Context().(string)
-		} else {
-			lastMsg = "No previous message"
-		}
-		s.Emit("bye", lastMsg)
-		s.Close()
-		return "Disconnected: " + lastMsg
-	})
-
-	server.OnDisconnect("/", func(s socketio.Conn, reason string) {
-		log.Printf("Client disconnected (ID: %s), Reason: %s\n", s.ID(), reason)
-	})
-
-	server.OnError("/", func(s socketio.Conn, err error) {
-		log.Printf("Socket error (ID: %s): %v\n", s.ID(), err.Error())
-		s.Emit("error", err.Error())
-	})
-
-	// Start the Socket.IO server in a goroutine
-	go func() {
-		if err := server.Serve(); err != nil {
-			log.Fatalf("Socket.IO server failed: %v\n", err)
-		}
-	}()
-	defer server.Close()
-
-	// Integrate Socket.IO with Gin
-	router.GET("/socket.io/*any", gin.WrapH(server))
-	router.POST("/socket.io/*any", gin.WrapH(server))
+	// WebSocket route
+	router.GET("/ws", websocketHandler)
 
 	// Register other routes
 	routes.RegisterRoutes(router)
