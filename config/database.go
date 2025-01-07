@@ -32,6 +32,6 @@ func ConnectDatabase() *gorm.DB {
 	// Gán DB toàn cục
 	DB = database
 
-	fmt.Println("Kết nối cơ sở dữ liệu thành công!")
+	fmt.Println("Connected to database!")
 	return DB
 }
