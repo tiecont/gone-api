@@ -1,36 +1,52 @@
 package main
 
 import (
-	"gone-be/config"
-	model "gone-be/modules/user/models"
-	"gone-be/routes"
+	"gone-be/services"
 	"log"
 	"os"
+	"time"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
+	"gone-be/config"
+	"gone-be/routes"
 )
 
 func main() {
-	// Tải biến môi trường từ .env
-	_ = godotenv.Load()
+	// Load environment variables from .env file
+	if err := godotenv.Load(); err != nil {
+		log.Fatalf("Error loading .env file: %v", err)
+	}
 
-	// Kết nối cơ sở dữ liệu
-	db := config.ConnectDatabase()
-	model.MigrateUser(db)
-	// Khởi tạo router
-	r := gin.Default()
+	// Setup Gin router
+	router := gin.Default()
 
-	// Định tuyến (ví dụ)
-	r.GET("/", func(c *gin.Context) {
-		c.JSON(200, gin.H{"message": "Welcome to Gin-Gonic API!"})
-	})
-	routes.RegisterRoutes(r)
-	// Khởi chạy server
+	// Enable CORS
+	router.Use(cors.New(cors.Config{
+		AllowOrigins:     []string{"*"},
+		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"*"},
+		ExposeHeaders:    []string{"*"},
+		AllowCredentials: true,
+		MaxAge:           12 * time.Hour,
+	}))
+
+	// WebSocket route
+	router.GET("/ws", services.WebSocketHandler)
+
+	// Register other routes
+	routes.RegisterRoutes(router)
+
+	// Connect to the database
+	config.ConnectDatabase()
+
+	// Start API and WebSocket server
 	port := os.Getenv("APP_PORT")
 	if port == "" {
-		port = "8080"
+		port = "8080" // Default port
 	}
-	log.Printf("Server is running on port %s", port)
-	r.Run(":" + port)
+	if err := router.Run(":" + port); err != nil {
+		log.Fatalf("Could not start server: %v\n", err)
+	}
 }
