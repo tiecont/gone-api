@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	Users "gone-be/modules/user/models"
 	"log"
 	"os"
 
@@ -31,6 +32,12 @@ func ConnectDatabase() *gorm.DB {
 
 	// Gán DB toàn cục
 	DB = database
+
+	// Auto migrate Users
+	err = Users.MigrateUser(DB)
+	if err != nil {
+		return nil
+	}
 
 	fmt.Println("Connected to database!")
 	return DB
