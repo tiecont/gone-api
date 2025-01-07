@@ -12,6 +12,7 @@ type User struct {
 	Username  string    `gorm:"size:255;not null;unique"`
 	Email     string    `gorm:"size:255;not null;unique"`
 	Password  string    `gorm:"size:255;not null"`
+	Status    bool      `gorm:"default:true"`
 	CreatedAt time.Time `gorm:"autoCreateTime"`
 	UpdatedAt time.Time `gorm:"autoUpdateTime"`
 }
