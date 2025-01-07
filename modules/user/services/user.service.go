@@ -2,10 +2,10 @@ package services
 
 import (
 	"errors"
-	"gone-be/config"
-	model "gone-be/modules/user/models"
 	"fmt"
 	"golang.org/x/crypto/bcrypt"
+	"gone-be/config"
+	model "gone-be/modules/user/models"
 )
 
 func GetAllUsers() ([]model.User, error) {
