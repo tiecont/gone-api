@@ -1,20 +1,26 @@
-# Sử dụng image chính thức của Golang
+# Use the official Golang image
 FROM golang:1.21.1
 
-# Thiết lập thư mục làm việc
+# Install Air
+RUN curl -sSfL https://raw.githubusercontent.com/cosmtrek/air/master/install.sh | sh -s -- -b /usr/local/bin
+
+# Set the working directory
 WORKDIR /app
 
-# Sao chép tệp `go.mod` và `go.sum` trước
+# Copy go.mod and go.sum first for caching dependencies
 COPY go.mod go.sum ./
 
-# Tải các thư viện phụ thuộc
+# Download dependencies
 RUN go mod download
 
-# Sao chép mã nguồn dự án
+# Copy the rest of the code
 COPY . .
 
-# Biên dịch ứng dụng
-RUN go build -o main .
+# Install Air config if not already present
+RUN air init || true
 
-# Chạy ứng dụng
-CMD ["./main"]
+# Expose the application port
+EXPOSE 2000
+
+# Command to run Air
+CMD ["air"]
