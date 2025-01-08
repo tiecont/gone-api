@@ -1,6 +1,7 @@
 package services
 
 import (
+	"encoding/json"
 	"log"
 	"net/http"
 
@@ -17,6 +18,12 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
+// WebSocketMessage Define a struct to represent the JSON message format
+type WebSocketMessage struct {
+	Type    string `json:"type"`
+	Message string `json:"message"`
+}
+
 // WebSocketHandler handles WebSocket connections and messages
 func WebSocketHandler(c *gin.Context) {
 	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
@@ -30,8 +37,6 @@ func WebSocketHandler(c *gin.Context) {
 		}
 	}()
 
-	log.Println("WebSocket client connected:", conn.RemoteAddr())
-
 	for {
 		// Read message from client
 		messageType, message, err := conn.ReadMessage()
@@ -40,24 +45,79 @@ func WebSocketHandler(c *gin.Context) {
 			break
 		}
 
-		// Handle different events
-		switch string(message) {
+		// Unmarshal the JSON message into the WebSocketMessage struct
+		var wsMessage WebSocketMessage
+		err = json.Unmarshal(message, &wsMessage)
+		if err != nil {
+			log.Printf("Error unmarshalling message: %v", err)
+			break
+		}
+
+		// Handle events using switch-case
+		switch wsMessage.Type {
 		case "notice":
-			response := "Received: " + string(message)
-			if err := conn.WriteMessage(messageType, []byte(response)); err != nil {
+			response := WebSocketMessage{
+				Type:    "notice",
+				Message: "Received: " + wsMessage.Message,
+			}
+			// Marshal response to JSON
+			responseJSON, err := json.Marshal(response)
+			if err != nil {
+				log.Printf("Error marshalling response: %v", err)
+				break
+			}
+			// Send the JSON response
+			if err := conn.WriteMessage(messageType, responseJSON); err != nil {
 				log.Printf("Error writing message: %v", err)
 				break
 			}
 		case "bye":
-			response := "Disconnected: " + string(message)
-			if err := conn.WriteMessage(messageType, []byte(response)); err != nil {
+			response := WebSocketMessage{
+				Type:    "bye",
+				Message: "Disconnected: " + wsMessage.Message,
+			}
+			// Marshal response to JSON
+			responseJSON, err := json.Marshal(response)
+			if err != nil {
+				log.Printf("Error marshalling response: %v", err)
+				break
+			}
+			// Send the JSON response
+			if err := conn.WriteMessage(messageType, responseJSON); err != nil {
 				log.Printf("Error writing message: %v", err)
 				break
 			}
 			break
+		case "ping":
+			// Send a "pong" response as a JSON string
+			response := WebSocketMessage{
+				Type:    "ping",
+				Message: "pong",
+			}
+			// Marshal response to JSON
+			responseJSON, err := json.Marshal(response)
+			if err != nil {
+				log.Printf("Error marshalling response: %v", err)
+				break
+			}
+			// Send the JSON response
+			if err := conn.WriteMessage(websocket.TextMessage, responseJSON); err != nil {
+				log.Printf("Error writing message: %v", err)
+				break
+			}
 		default:
-			response := "Echo: " + string(message)
-			if err := conn.WriteMessage(messageType, []byte(response)); err != nil {
+			response := WebSocketMessage{
+				Type:    "echo",
+				Message: wsMessage.Message,
+			}
+			// Marshal response to JSON
+			responseJSON, err := json.Marshal(response)
+			if err != nil {
+				log.Printf("Error marshalling response: %v", err)
+				break
+			}
+			// Send the JSON response
+			if err := conn.WriteMessage(messageType, responseJSON); err != nil {
 				log.Printf("Error writing message: %v", err)
 				break
 			}

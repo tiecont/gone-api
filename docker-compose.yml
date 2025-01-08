@@ -29,6 +29,9 @@ services:
       - DB_HOST=db
       - DB_PORT=${DB_PORT}
       - DB_NAME=${DB_NAME}
+    volumes:
+      - .:/app  # Mount the project directory to the container
+      - /app/tmp  # Prevent caching issues with Air
     depends_on:
       - db
 
