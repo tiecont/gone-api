@@ -44,7 +44,6 @@ func WebSocketHandler(c *gin.Context) {
 			log.Printf("Error reading message: %v", err)
 			break
 		}
-
 		// Unmarshal the JSON message into the WebSocketMessage struct
 		var wsMessage WebSocketMessage
 		err = json.Unmarshal(message, &wsMessage)
@@ -52,7 +51,6 @@ func WebSocketHandler(c *gin.Context) {
 			log.Printf("Error unmarshalling message: %v", err)
 			break
 		}
-
 		// Handle events using switch-case
 		switch wsMessage.Type {
 		case "notice":
@@ -89,10 +87,9 @@ func WebSocketHandler(c *gin.Context) {
 			}
 			break
 		case "ping":
-			// Send a "pong" response as a JSON string
 			response := WebSocketMessage{
 				Type:    "ping",
-				Message: "pong",
+				Message: wsMessage.Message,
 			}
 			// Marshal response to JSON
 			responseJSON, err := json.Marshal(response)

@@ -12,7 +12,7 @@ func GetAllUsers() ([]model.User, error) {
 	db := config.DB
 	var users []model.User
 
-	// Lấy danh sách người dùng từ cơ sở dữ liệu
+	// Find users
 	if err := db.Find(&users).Error; err != nil {
 		return nil, err
 	}

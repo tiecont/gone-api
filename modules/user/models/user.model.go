@@ -17,7 +17,7 @@ type User struct {
 	UpdatedAt time.Time `gorm:"autoUpdateTime"`
 }
 
-// MigrateUser migrates the User model to create the table in the database.
+// MigrateUser migrate the User model to create the table in the database.
 func MigrateUser(db *gorm.DB) error {
 	return db.AutoMigrate(&User{})
 }
