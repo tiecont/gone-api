@@ -22,9 +22,8 @@ COPY . .
 # Install Air config if not already present
 RUN air init || true
 
+# Default command to run Air
+CMD ["/app/entrypoint.sh"]
+
 # Command to run Air
 CMD ["air"]
-
-# Command to run migrations and start the server
-ENTRYPOINT ["./entrypoint.sh"]
-
