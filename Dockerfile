@@ -4,6 +4,9 @@ FROM golang:1.21.1
 # Install Air
 RUN curl -sSfL https://raw.githubusercontent.com/cosmtrek/air/master/install.sh | sh -s -- -b /usr/local/bin
 
+# Copy Air config
+COPY .air.toml .
+
 # Set the working directory
 WORKDIR /app
 
@@ -19,8 +22,9 @@ COPY . .
 # Install Air config if not already present
 RUN air init || true
 
-# Expose the application port
-EXPOSE 2000
-
 # Command to run Air
 CMD ["air"]
+
+# Command to run migrations and start the server
+ENTRYPOINT ["./entrypoint.sh"]
+

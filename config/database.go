@@ -2,7 +2,9 @@ package config
 
 import (
 	"fmt"
+	Roles "gone-be/modules/role/models"
 	Users "gone-be/modules/user/models"
+	"gorm.io/gorm/logger"
 	"log"
 	"os"
 
@@ -25,18 +27,23 @@ func ConnectDatabase() *gorm.DB {
 		dbUser, dbPass, dbHost, dbPort, dbName)
 
 	// Kết nối MySQL
-	database, err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
-	if err != nil {
-		log.Fatalf("Không thể kết nối cơ sở dữ liệu: %v", err)
-	}
-
+	database, err := gorm.Open(mysql.Open(dsn), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Info), // Enable SQL query logs
+	})
 	// Gán DB toàn cục
 	DB = database
-
-	// Auto migrate Users
-	err = Users.MigrateUser(DB)
+	// Enable query logs for debugging
+	DB = DB.Session(&gorm.Session{
+		Logger: logger.Default.LogMode(logger.Info),
+	})
+	err = Roles.MigrateRole(DB) // Migrate Role first
 	if err != nil {
-		return nil
+		log.Fatalf("Failed to migrate Role: %v", err)
+	}
+
+	err = Users.MigrateUser(DB) // Then migrate User
+	if err != nil {
+		log.Fatalf("Failed to migrate User: %v", err)
 	}
 
 	fmt.Println("Connected to database!")

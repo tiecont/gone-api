@@ -1,6 +1,7 @@
 package models
 
 import (
+	Roles "gone-be/modules/role/models"
 	"time"
 
 	"gorm.io/gorm"
@@ -8,16 +9,17 @@ import (
 
 // User represents the user model.
 type User struct {
-	ID        uint      `gorm:"primaryKey;autoIncrement"`
-	Username  string    `gorm:"size:255;not null;unique"`
-	Email     string    `gorm:"size:255;not null;unique"`
-	Password  string    `gorm:"size:255;not null"`
-	Status    bool      `gorm:"default:true"`
-	CreatedAt time.Time `gorm:"autoCreateTime"`
-	UpdatedAt time.Time `gorm:"autoUpdateTime"`
+	ID        uint       `gorm:"primaryKey;autoIncrement"`
+	Username  string     `gorm:"size:255;not null;unique"`
+	Email     string     `gorm:"size:255;not null;unique"`
+	Password  string     `gorm:"size:255;not null"`
+	Status    bool       `gorm:"default:true"`
+	Role      Roles.Role `gorm:"foreignKey:UserID;references:ID"`
+	CreatedAt time.Time  `gorm:"autoCreateTime"`
+	UpdatedAt time.Time  `gorm:"autoUpdateTime"`
 }
 
-// MigrateUser migrate the User model to create the table in the database.
+// MigrateUser migrates the User model to create the table in the database.
 func MigrateUser(db *gorm.DB) error {
 	return db.AutoMigrate(&User{})
 }

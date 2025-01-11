@@ -18,7 +18,7 @@ func main() {
 	if err := godotenv.Load(); err != nil {
 		log.Fatalf("Error loading .env file: %v", err)
 	}
-
+	
 	// Setup Gin router
 	router := gin.Default()
 
@@ -35,11 +35,11 @@ func main() {
 	// WebSocket route
 	router.GET("/ws", services.WebSocketHandler)
 
-	// Register other routes
-	routes.RegisterRoutes(router)
-
 	// Connect to the database
 	config.ConnectDatabase()
+
+	// Register other routes
+	routes.RegisterRoutes(router)
 
 	// Start API and WebSocket server
 	port := os.Getenv("APP_PORT")
