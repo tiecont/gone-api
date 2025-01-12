@@ -2,27 +2,47 @@ package services
 
 import (
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"golang.org/x/crypto/bcrypt"
 	"gone-be/config"
 	AccessTokens "gone-be/modules/key_token/access_token/models"
 	RefreshTokens "gone-be/modules/key_token/refresh_token/models"
+	Profiles "gone-be/modules/profile/models"
 	Users "gone-be/modules/user/models"
+	"io"
+	"io/ioutil"
+	"log"
 	"math/rand"
 	"net/http"
 )
 
-func GetAllUsers() ([]Users.User, error) {
+func GetUserInfo(accessToken string) (map[string]interface{}, error) {
 	db := config.DB
-	var users []Users.User
 
-	// Find users
-	if err := db.Find(&users).Error; err != nil {
-		return nil, err
+	// Step 1: Validate the access token
+	var tokenRecord AccessTokens.AccessToken
+	if err := db.Where("token = ?", accessToken).First(&tokenRecord).Error; err != nil {
+		return nil, fmt.Errorf("invalid or expired access token")
 	}
 
-	return users, nil
+	// Step 2: Get the user and their associated profile using a raw query
+	var results []map[string]interface{} // This will hold the raw query results
+	if err := db.Table("users").
+		Joins("INNER JOIN profiles ON profiles.user_id = users.id").
+		Select("users.id, users.username, users.email, users.phone_number, users.google_id, users.facebook_id, users.password, users.status, users.role_id, users.created_at, users.updated_at, profiles.*").
+		Where("users.id = ?", tokenRecord.UserID).
+		Scan(&results).Error; err != nil {
+		return nil, fmt.Errorf("user not found")
+	}
+
+	// The results will now contain the raw data in a map format
+	if len(results) == 0 {
+		return nil, fmt.Errorf("no results found")
+	}
+
+	return results[0], nil
 }
 
 // RegisterUser HandleCreateUser handles the logic for creating a new user.
@@ -103,7 +123,10 @@ func LoginUser(email, phoneNumber, password, googleToken, facebookToken string) 
 	if err := bcrypt.CompareHashAndPassword([]byte(existingUser.Password), []byte(password)); err != nil {
 		return nil, http.StatusUnauthorized, errors.New("invalid password")
 	}
-
+	err := DeleteAllTokensByUserID(existingUser.ID)
+	if err != nil {
+		return nil, 0, err
+	}
 	// Step 5: Generate Hex Tokens
 	accessToken, refreshToken, err := generateHexTokens(existingUser.ID)
 	if err != nil {
@@ -119,23 +142,86 @@ func LoginUser(email, phoneNumber, password, googleToken, facebookToken string) 
 
 // LoginGoogle Google
 func LoginGoogle(googleToken string) (map[string]interface{}, error) {
-	// Simulate Google token validation (you should replace this with an actual Google API validation)
-	if googleToken == "" {
-		return nil, errors.New("invalid Google token")
-	}
-
-	// Assuming a valid user ID is retrieved from the Google token
-	userID := uint(1) // Example user ID
-
-	// Generate JWT tokens
-	accessToken, refreshToken, err := generateHexTokens(userID)
+	// Step 1: Send the access token to Google's userinfo endpoint
+	userInfoURL := fmt.Sprintf("https://www.googleapis.com/oauth2/v3/userinfo?access_token=%s", googleToken)
+	response, err := http.Get(userInfoURL)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to connect to Google userinfo API: %w", err)
+	}
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			log.Println("failed to close response body")
+		}
+	}(response.Body)
+
+	// Step 2: Check the response status
+	if response.StatusCode != http.StatusOK {
+		bodyBytes, _ := ioutil.ReadAll(response.Body)
+		return nil, fmt.Errorf("failed to fetch user info from Google API: %s", string(bodyBytes))
 	}
 
+	// Step 3: Parse the JSON response
+	var googleUserInfo struct {
+		Sub           string `json:"sub"`            // Google user ID
+		Email         string `json:"email"`          // User's email
+		EmailVerified bool   `json:"email_verified"` // Whether email is verified
+		Name          string `json:"name"`           // Full name
+		Picture       string `json:"picture"`        // Profile picture URL
+	}
+	if err := json.NewDecoder(response.Body).Decode(&googleUserInfo); err != nil {
+		return nil, fmt.Errorf("failed to decode Google user info: %w", err)
+	}
+
+	// Step 4: Check if the user exists in the database
+	db := config.DB
+	var existingUser Users.User
+	if err := db.Where("google_id = ?", googleUserInfo.Sub).First(&existingUser).Error; err != nil {
+		// If user doesn't exist, create a new user
+		newUser := Users.User{
+			GoogleID: googleUserInfo.Sub,
+			Username: googleUserInfo.Name,
+			Email:    googleUserInfo.Email,
+			RoleID:   2, // Default for new user
+		}
+		if err := db.Create(&newUser).Error; err != nil {
+			return nil, fmt.Errorf("failed to create user: %v", err)
+		}
+
+		// Create a profile for the new user
+		newProfile := Profiles.Profile{
+			UserID:     newUser.ID,
+			ProfilePic: googleUserInfo.Picture,
+			Birthday:   nil,
+		}
+		if err := db.Create(&newProfile).Error; err != nil {
+			return nil, fmt.Errorf("failed to create profile: %v", err)
+		}
+
+		existingUser = newUser // Assign the newly created user to `existingUser`
+	}
+
+	err = DeleteAllTokensByUserID(existingUser.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to delete tokens: %w", err)
+	}
+	// Step 5: Generate hex tokens for the user
+	accessToken, refreshToken, err := generateHexTokens(existingUser.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate tokens: %w", err)
+	}
+
+	// Step 6: Return the tokens and user info
 	return map[string]interface{}{
 		"access_token":  accessToken,
 		"refresh_token": refreshToken,
+		"user_info": map[string]interface{}{
+			"id":            existingUser.ID,
+			"email":         existingUser.Email,
+			"emailVerified": googleUserInfo.EmailVerified,
+			"name":          existingUser.Username,
+			"profile_pic":   googleUserInfo.Picture,
+		},
 	}, nil
 }
 
@@ -199,4 +285,31 @@ func generateHexTokens(userID uint) (string, string, error) {
 	}
 
 	return accessToken, refreshToken, nil
+}
+
+func DeleteAllTokensByUserID(userID uint) error {
+	// Start a transaction to ensure both deletions are atomic
+	tx := config.DB.Begin()
+	if tx.Error != nil {
+		return fmt.Errorf("failed to begin transaction: %v", tx.Error)
+	}
+
+	// Delete all AccessTokens for the given UserID
+	if err := tx.Where("user_id = ?", userID).Delete(&AccessTokens.AccessToken{}).Error; err != nil {
+		tx.Rollback() // Rollback the transaction if deletion fails
+		return fmt.Errorf("failed to delete access tokens: %v", err)
+	}
+
+	// Delete all RefreshTokens for the given UserID
+	if err := tx.Where("user_id = ?", userID).Delete(&RefreshTokens.RefreshToken{}).Error; err != nil {
+		tx.Rollback() // Rollback the transaction if deletion fails
+		return fmt.Errorf("failed to delete refresh tokens: %v", err)
+	}
+
+	// Commit the transaction if both deletions succeed
+	if err := tx.Commit().Error; err != nil {
+		return fmt.Errorf("failed to commit transaction: %v", err)
+	}
+
+	return nil
 }
