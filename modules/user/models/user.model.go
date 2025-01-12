@@ -6,15 +6,15 @@ import (
 	"time"
 )
 
-// User represents the user model.
+// User represents the user model
 type User struct {
 	ID          uint       `gorm:"primaryKey;autoIncrement"`
-	Username    string     `gorm:"size:255;not null;unique"`
+	Username    string     `gorm:"size:255;not null;"`
 	Email       string     `gorm:"size:255;not null;unique"`
 	PhoneNumber int        `gorm:"size:11;default:null;unique"`
-	GoogleID    uint       `gorm:"default:null;unique"`
-	FacebookID  uint       `gorm:"default:null;unique"`
-	Password    string     `gorm:"size:255;not null"`
+	GoogleID    string     `gorm:"size:255;default:null;unique"`
+	FacebookID  string     `gorm:"size:255;default:null;unique"`
+	Password    string     `gorm:"size:255;default:null"`
 	Status      bool       `gorm:"default:true"`
 	RoleID      uint       `gorm:"not null"`
 	Role        Roles.Role `gorm:"foreignKey:RoleID;references:ID"` // Foreign key to Role

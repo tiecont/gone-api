@@ -4,28 +4,44 @@ import (
 	model "gone-be/modules/user/models"
 	"gone-be/modules/user/services"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
 
-func GetUsers(c *gin.Context) {
+func GetUser(c *gin.Context) {
+	// Step 1: Get the Authorization header
+	authHeader := c.GetHeader("Authorization")
+	if authHeader == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing Authorization header"})
+		return
+	}
+
+	// Step 2: Extract the Bearer token
+	tokenParts := strings.Split(authHeader, " ")
+	if len(tokenParts) != 2 || strings.ToLower(tokenParts[0]) != "bearer" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid Authorization header format"})
+		return
+	}
+	accessToken := tokenParts[1]
+
 	// Chỉ gọi service để lấy dữ liệu
-	users, err := services.GetAllUsers()
+	users, err := services.GetUserInfo(accessToken)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"status": gin.H{
 				"code":    http.StatusInternalServerError,
-				"message": "Failed to create user",
+				"message": "Failed to get user",
 			},
 			"error": err.Error(),
 		})
 		return
 	}
-	// Trả về danh sách người dùng
+
 	c.JSON(http.StatusOK, gin.H{
 		"status": gin.H{
 			"code":    http.StatusOK,
-			"message": "Retrieved the list of users successfully",
+			"message": "Retrieved the profile of user successfully",
 		},
 		"data": users,
 	})
@@ -104,6 +120,43 @@ func LoginUser(c *gin.Context) {
 		return
 	}
 
+	// Return success response with the tokens
+	c.JSON(http.StatusOK, gin.H{
+		"status": gin.H{
+			"code":    http.StatusOK,
+			"message": "Login successful",
+		},
+		"data": response,
+	})
+}
+
+func LoginGoogle(c *gin.Context) {
+	var request struct {
+		Token string `json:"token"`
+	}
+	// Bind the JSON body to the struct
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status": gin.H{
+				"code":    http.StatusBadRequest,
+				"message": "Invalid input",
+			},
+			"error": err.Error(),
+		})
+		return
+	}
+
+	// Call the LoginUser service
+	response, err := services.LoginGoogle(request.Token)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status": gin.H{
+				"code":    http.StatusBadRequest,
+				"message": err.Error(),
+			},
+		})
+		return
+	}
 	// Return success response with the tokens
 	c.JSON(http.StatusOK, gin.H{
 		"status": gin.H{
