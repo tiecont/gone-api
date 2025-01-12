@@ -32,7 +32,7 @@ func GetUsers(c *gin.Context) {
 
 }
 
-func CreateUser(c *gin.Context) {
+func RegisterUser(c *gin.Context) {
 	// Step 1: Parse JSON request body into `
 
 	var userData model.User
@@ -48,7 +48,7 @@ func CreateUser(c *gin.Context) {
 	}
 
 	// Step 2: Call the service layer to handle user creation
-	response, err := services.HandleCreateUser(userData)
+	response, err := services.RegisterUser(userData)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"status": gin.H{
@@ -65,6 +65,50 @@ func CreateUser(c *gin.Context) {
 		"status": gin.H{
 			"code":    http.StatusCreated,
 			"message": "User has been created successfully",
+		},
+		"data": response,
+	})
+}
+
+func LoginUser(c *gin.Context) {
+	// Define a struct to parse the incoming JSON request body
+	var request struct {
+		Email         string `json:"email"`
+		PhoneNumber   string `json:"phone_number"`
+		Password      string `json:"password"`
+		FacebookToken string `json:"facebook_token"`
+		GoogleToken   string `json:"google_token"`
+	}
+
+	// Bind the JSON body to the struct
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status": gin.H{
+				"code":    http.StatusBadRequest,
+				"message": "Invalid input",
+			},
+			"error": err.Error(),
+		})
+		return
+	}
+
+	// Call the LoginUser service
+	response, status, err := services.LoginUser(request.Email, request.PhoneNumber, request.Password, request.GoogleToken, request.FacebookToken)
+	if err != nil {
+		c.JSON(status, gin.H{
+			"status": gin.H{
+				"code":    status,
+				"message": err.Error(),
+			},
+		})
+		return
+	}
+
+	// Return success response with the tokens
+	c.JSON(http.StatusOK, gin.H{
+		"status": gin.H{
+			"code":    http.StatusOK,
+			"message": "Login successful",
 		},
 		"data": response,
 	})
