@@ -20,7 +20,6 @@ func main() {
 	}
 	// Setup Gin router
 	router := gin.Default()
-
 	// Enable CORS
 	router.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{"*"},

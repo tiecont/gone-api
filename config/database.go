@@ -88,7 +88,7 @@ func runMigrations(db *gorm.DB) error {
 			return fmt.Errorf("migration failed: %w", err)
 		}
 	}
-	
+
 	fmt.Println("All migrations completed successfully!")
 	return nil
 }

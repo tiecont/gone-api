@@ -31,7 +31,7 @@ func GetUserInfo(accessToken string) (map[string]interface{}, error) {
 	var results []map[string]interface{} // This will hold the raw query results
 	if err := db.Table("users").
 		Joins("INNER JOIN profiles ON profiles.user_id = users.id").
-		Select("users.id, users.username, users.email, users.phone_number, users.google_id, users.facebook_id, users.password, users.status, users.role_id, users.created_at, users.updated_at, profiles.*").
+		Select("users.id, users.username, users.email, users.phone_number, users.google_id, users.twitter_id, users.password, users.status, users.role_id, users.created_at, users.updated_at, profiles.*").
 		Where("users.id = ?", tokenRecord.UserID).
 		Scan(&results).Error; err != nil {
 		return nil, fmt.Errorf("user not found")
@@ -77,22 +77,22 @@ func RegisterUser(user Users.User) (map[string]interface{}, error) {
 
 	// Step 5: Format the response to exclude sensitive data
 	response := map[string]interface{}{
-		"id":          user.ID,
-		"username":    user.Username,
-		"email":       user.Email,
-		"status":      user.Status,
-		"role_id":     user.RoleID,
-		"facebook_id": user.FacebookID,
-		"google_id":   user.GoogleID,
-		"created_at":  user.CreatedAt,
-		"updated_at":  user.UpdatedAt,
+		"id":         user.ID,
+		"username":   user.Username,
+		"email":      user.Email,
+		"status":     user.Status,
+		"role_id":    user.RoleID,
+		"twitter_id": user.TwitterID,
+		"google_id":  user.GoogleID,
+		"created_at": user.CreatedAt,
+		"updated_at": user.UpdatedAt,
 	}
 
 	// Step 6: Return the formatted response
 	return response, nil
 }
 
-func LoginUser(email, phoneNumber, password, googleToken, facebookToken string) (map[string]interface{}, int, error) {
+func LoginUser(email, phoneNumber, password, googleToken, twitterID string) (map[string]interface{}, int, error) {
 	db := config.DB
 
 	// Step 1: Check for Google Login
@@ -105,15 +105,11 @@ func LoginUser(email, phoneNumber, password, googleToken, facebookToken string) 
 	}
 
 	// Step 2: Check for Facebook Login
-	if facebookToken != "" {
-		result, err := LoginFacebook(facebookToken)
-		if err != nil {
-			return nil, http.StatusUnauthorized, errors.New("invalid Facebook token")
-		}
-		return result, http.StatusOK, nil
+	if twitterID != "" {
+		log.Println(twitterID)
 	}
 
-	// Step 3: Regular Login (if GoogleID and FacebookID are not provided)
+	// Step 3: Regular Login (if GoogleID and TwitterID are not provided)
 	var existingUser Users.User
 	if err := db.Where("email = ? OR phone_number = ?", email, phoneNumber).First(&existingUser).Error; err != nil {
 		return nil, http.StatusNotFound, errors.New("invalid email, phone number, or user not found")
@@ -222,28 +218,6 @@ func LoginGoogle(googleToken string) (map[string]interface{}, error) {
 			"name":          existingUser.Username,
 			"profile_pic":   googleUserInfo.Picture,
 		},
-	}, nil
-}
-
-// LoginFacebook login by facebook
-func LoginFacebook(facebookToken string) (map[string]interface{}, error) {
-	// Simulate Facebook token validation (you should replace this with an actual Facebook API validation)
-	if facebookToken == "" {
-		return nil, errors.New("invalid Facebook token")
-	}
-
-	// Assuming a valid user ID is retrieved from the Facebook token
-	userID := uint(2) // Example user ID
-
-	// Generate JWT tokens
-	accessToken, refreshToken, err := generateHexTokens(userID)
-	if err != nil {
-		return nil, err
-	}
-
-	return map[string]interface{}{
-		"access_token":  accessToken,
-		"refresh_token": refreshToken,
 	}, nil
 }
 

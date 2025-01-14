@@ -1,20 +1,14 @@
 #!/bin/bash
 
-# Exit on error
+# Exit immediately if a command exits with a non-zero status
 set -e
 
-# Wait for the database to be ready
-echo "Waiting for the database..."
-
-echo "Database is ready!"
-
-# Run migrations
-echo "Running migrations..."
-if ! go run main.go migrate; then
-  echo "Migration failed. Exiting."
-  exit 1
+# Ensure the main binary is built before running
+if [ ! -f "./main" ]; then
+  echo "Binary './main' not found. Building it now..."
+  go build -buildvcs=false -o ./main .
 fi
 
 # Start the application with Air
 echo "Starting the application with Air..."
-exec air
+./bin/air -c .air.toml

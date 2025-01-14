@@ -1,6 +1,7 @@
 package models
 
 import (
+	"fmt"
 	Roles "gone-be/modules/role/models"
 	"gorm.io/gorm"
 	"time"
@@ -13,7 +14,7 @@ type User struct {
 	Email       string     `gorm:"size:255;not null;unique"`
 	PhoneNumber int        `gorm:"size:11;default:null;unique"`
 	GoogleID    string     `gorm:"size:255;default:null;unique"`
-	FacebookID  string     `gorm:"size:255;default:null;unique"`
+	TwitterID   string     `gorm:"size:255;default:null;unique"`
 	Password    string     `gorm:"size:255;default:null"`
 	Status      bool       `gorm:"default:true"`
 	RoleID      uint       `gorm:"not null"`
@@ -24,5 +25,10 @@ type User struct {
 
 // MigrateUser migrates the User model to create the table in the database
 func MigrateUser(db *gorm.DB) error {
-	return db.AutoMigrate(&User{})
+	// Auto-migrate the User model
+	if err := db.AutoMigrate(&User{}); err != nil {
+		return fmt.Errorf("failed to auto-migrate User model: %w", err)
+	}
+
+	return nil
 }
