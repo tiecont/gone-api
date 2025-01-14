@@ -11,4 +11,4 @@ fi
 
 # Start the application with Air
 echo "Starting the application with Air..."
-./bin/air -c .air.toml
+exec air
