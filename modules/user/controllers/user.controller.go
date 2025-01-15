@@ -1,8 +1,11 @@
 package controllers
 
 import (
+	"bytes"
 	model "gone-be/modules/user/models"
 	"gone-be/modules/user/services"
+	"io"
+	"log"
 	"net/http"
 	"strings"
 
@@ -157,6 +160,61 @@ func LoginGoogle(c *gin.Context) {
 		})
 		return
 	}
+	// Return success response with the tokens
+	c.JSON(http.StatusOK, gin.H{
+		"status": gin.H{
+			"code":    http.StatusOK,
+			"message": "Login successful",
+		},
+		"data": response,
+	})
+}
+
+func LoginTwitter(c *gin.Context) {
+	// Read and log the raw request body
+	body, _ := io.ReadAll(c.Request.Body)
+	// Reset the request body for further processing
+	c.Request.Body = io.NopCloser(bytes.NewBuffer(body))
+
+	// Define the request struct
+	var request struct {
+		Username               string `json:"username"`
+		Email                  string `json:"email"`
+		Image                  string `json:"image"`
+		ProfileBackgroundImage string `json:"background_image"`
+		TwitterID              string `json:"twitter_id"`
+	}
+
+	// Bind JSON to the struct
+	if err := c.ShouldBindJSON(&request); err != nil {
+		log.Println("Error binding JSON:", err)
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status": gin.H{
+				"code":    http.StatusBadRequest,
+				"message": "Invalid input",
+			},
+			"error": err.Error(),
+		})
+		return
+	}
+	// Call the LoginUser service
+	response, err := services.LoginTwitter(
+		request.Username,
+		request.Email,
+		request.Image,
+		request.ProfileBackgroundImage,
+		request.TwitterID,
+	)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status": gin.H{
+				"code":    http.StatusBadRequest,
+				"message": err.Error(),
+			},
+		})
+		return
+	}
+
 	// Return success response with the tokens
 	c.JSON(http.StatusOK, gin.H{
 		"status": gin.H{

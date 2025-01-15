@@ -211,13 +211,53 @@ func LoginGoogle(googleToken string) (map[string]interface{}, error) {
 	return map[string]interface{}{
 		"access_token":  accessToken,
 		"refresh_token": refreshToken,
-		"user_info": map[string]interface{}{
-			"id":            existingUser.ID,
-			"email":         existingUser.Email,
-			"emailVerified": googleUserInfo.EmailVerified,
-			"name":          existingUser.Username,
-			"profile_pic":   googleUserInfo.Picture,
-		},
+	}, nil
+}
+
+func LoginTwitter(username, email, image, profileBackgroundImage, twitterId string) (map[string]interface{}, error) {
+	db := config.DB
+	// Check if the user exists along with their profile using a join
+	var existingUser Users.User
+	if err := db.Where("twitter_id = ?", twitterId).First(&existingUser).Error; err != nil {
+		// If user doesn't exist, create a new user
+		newUser := Users.User{
+			TwitterID: twitterId,
+			Username:  username,
+			Email:     email,
+			RoleID:    2, // Default role for new users
+		}
+		if err := db.Create(&newUser).Error; err != nil {
+			return nil, fmt.Errorf("failed to create user: %v", err)
+		}
+
+		// Create a profile for the new user
+		newProfile := Profiles.Profile{
+			UserID:     newUser.ID,
+			ProfilePic: image,
+			CoverPhoto: profileBackgroundImage,
+			Birthday:   nil,
+		}
+		if err := db.Create(&newProfile).Error; err != nil {
+			return nil, fmt.Errorf("failed to create profile: %v", err)
+		}
+
+		existingUser = newUser // Assign the newly created user to `existingUser`
+	}
+
+	err := DeleteAllTokensByUserID(existingUser.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to delete tokens: %w", err)
+	}
+	// Step 5: Generate hex tokens for the user
+	accessToken, refreshToken, err := generateHexTokens(existingUser.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate tokens: %w", err)
+	}
+
+	// Return the tokens and user info, including the profile data
+	return map[string]interface{}{
+		"access_token":  accessToken,
+		"refresh_token": refreshToken,
 	}, nil
 }
 
