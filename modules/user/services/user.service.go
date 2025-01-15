@@ -11,6 +11,7 @@ import (
 	RefreshTokens "gone-be/modules/key_token/refresh_token/models"
 	Profiles "gone-be/modules/profile/models"
 	Users "gone-be/modules/user/models"
+	"gorm.io/gorm"
 	"io"
 	"io/ioutil"
 	"log"
@@ -172,42 +173,55 @@ func LoginGoogle(googleToken string) (map[string]interface{}, error) {
 	// Step 4: Check if the user exists in the database
 	db := config.DB
 	var existingUser Users.User
-	if err := db.Where("google_id = ?", googleUserInfo.Sub).First(&existingUser).Error; err != nil {
-		// If user doesn't exist, create a new user
-		newUser := Users.User{
-			GoogleID: googleUserInfo.Sub,
-			Username: googleUserInfo.Name,
-			Email:    googleUserInfo.Email,
-			RoleID:   2, // Default for new user
-		}
-		if err := db.Create(&newUser).Error; err != nil {
-			return nil, fmt.Errorf("failed to create user: %v", err)
-		}
+	if err := db.Where("email = ?", googleUserInfo.Email).First(&existingUser).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			// If user doesn't exist, create a new user
+			newUser := Users.User{
+				GoogleID: googleUserInfo.Sub,
+				Username: googleUserInfo.Name,
+				Email:    googleUserInfo.Email,
+				RoleID:   2, // Default for new user
+			}
+			if err := db.Create(&newUser).Error; err != nil {
+				return nil, fmt.Errorf("failed to create user: %v", err)
+			}
 
-		// Create a profile for the new user
-		newProfile := Profiles.Profile{
-			UserID:     newUser.ID,
-			ProfilePic: googleUserInfo.Picture,
-			Birthday:   nil,
+			// Create a profile for the new user
+			newProfile := Profiles.Profile{
+				UserID:     newUser.ID,
+				ProfilePic: googleUserInfo.Picture,
+				Birthday:   nil,
+			}
+			if err := db.Create(&newProfile).Error; err != nil {
+				return nil, fmt.Errorf("failed to create profile: %v", err)
+			}
+			existingUser = newUser // Assign the newly created user to `existingUser`
+		} else {
+			return nil, fmt.Errorf("failed to query user: %v", err)
 		}
-		if err := db.Create(&newProfile).Error; err != nil {
-			return nil, fmt.Errorf("failed to create profile: %v", err)
+	} else {
+		// User exists, check if Google ID is missing and update it
+		if existingUser.GoogleID == "" {
+			existingUser.GoogleID = googleUserInfo.Sub
+			if err := db.Save(&existingUser).Error; err != nil {
+				return nil, fmt.Errorf("failed to update Google ID: %v", err)
+			}
 		}
-
-		existingUser = newUser // Assign the newly created user to `existingUser`
 	}
 
+	// Step 5: Delete all tokens for the user (cleanup)
 	err = DeleteAllTokensByUserID(existingUser.ID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to delete tokens: %w", err)
 	}
-	// Step 5: Generate hex tokens for the user
+
+	// Step 6: Generate hex tokens for the user
 	accessToken, refreshToken, err := generateHexTokens(existingUser.ID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate tokens: %w", err)
 	}
 
-	// Step 6: Return the tokens and user info
+	// Step 7: Return the tokens and user info
 	return map[string]interface{}{
 		"access_token":  accessToken,
 		"refresh_token": refreshToken,
@@ -216,45 +230,94 @@ func LoginGoogle(googleToken string) (map[string]interface{}, error) {
 
 func LoginTwitter(username, email, image, profileBackgroundImage, twitterId string) (map[string]interface{}, error) {
 	db := config.DB
-	// Check if the user exists along with their profile using a join
+
+	// Check if the user exists by email
 	var existingUser Users.User
-	if err := db.Where("twitter_id = ?", twitterId).First(&existingUser).Error; err != nil {
-		// If user doesn't exist, create a new user
-		newUser := Users.User{
-			TwitterID: twitterId,
-			Username:  username,
-			Email:     email,
-			RoleID:    2, // Default role for new users
+	if err := db.Where("email = ?", email).First(&existingUser).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			// If user doesn't exist, create a new user
+			newUser := Users.User{
+				TwitterID: twitterId,
+				Username:  username,
+				Email:     email,
+				RoleID:    2, // Default role for new users
+			}
+			if err := db.Create(&newUser).Error; err != nil {
+				return nil, fmt.Errorf("failed to create user: %v", err)
+			}
+
+			// Create a profile for the new user
+			newProfile := Profiles.Profile{
+				UserID:     newUser.ID,
+				ProfilePic: image,
+				CoverPhoto: profileBackgroundImage,
+				Birthday:   nil,
+			}
+			if err := db.Create(&newProfile).Error; err != nil {
+				return nil, fmt.Errorf("failed to create profile: %v", err)
+			}
+
+			existingUser = newUser // Assign the newly created user to `existingUser`
+		} else {
+			// Other errors while querying the database
+			return nil, fmt.Errorf("failed to query user: %v", err)
 		}
-		if err := db.Create(&newUser).Error; err != nil {
-			return nil, fmt.Errorf("failed to create user: %v", err)
+	} else {
+		// User exists, update Twitter ID if missing
+		if existingUser.TwitterID == "" {
+			existingUser.TwitterID = twitterId
 		}
 
-		// Create a profile for the new user
-		newProfile := Profiles.Profile{
-			UserID:     newUser.ID,
-			ProfilePic: image,
-			CoverPhoto: profileBackgroundImage,
-			Birthday:   nil,
-		}
-		if err := db.Create(&newProfile).Error; err != nil {
-			return nil, fmt.Errorf("failed to create profile: %v", err)
+		// Update the user's profile fields if they are missing or need updating
+		var existingProfile Profiles.Profile
+		if err := db.Where("user_id = ?", existingUser.ID).First(&existingProfile).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				// Create a new profile if none exists
+				newProfile := Profiles.Profile{
+					UserID:     existingUser.ID,
+					ProfilePic: image,
+					CoverPhoto: profileBackgroundImage,
+					Birthday:   nil,
+				}
+				if err := db.Create(&newProfile).Error; err != nil {
+					return nil, fmt.Errorf("failed to create profile: %v", err)
+				}
+			} else {
+				// Other errors while querying the profile
+				return nil, fmt.Errorf("failed to query profile: %v", err)
+			}
+		} else {
+			// Update existing profile fields if they are missing or outdated
+			if existingProfile.ProfilePic == "" && image != "" {
+				existingProfile.ProfilePic = image
+			}
+			if existingProfile.CoverPhoto == "" && profileBackgroundImage != "" {
+				existingProfile.CoverPhoto = profileBackgroundImage
+			}
+			if err := db.Save(&existingProfile).Error; err != nil {
+				return nil, fmt.Errorf("failed to update profile: %v", err)
+			}
 		}
 
-		existingUser = newUser // Assign the newly created user to `existingUser`
+		// Save the updated user if changes were made
+		if err := db.Save(&existingUser).Error; err != nil {
+			return nil, fmt.Errorf("failed to update user: %v", err)
+		}
 	}
 
+	// Clean up old tokens
 	err := DeleteAllTokensByUserID(existingUser.ID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to delete tokens: %w", err)
 	}
-	// Step 5: Generate hex tokens for the user
+
+	// Generate new tokens
 	accessToken, refreshToken, err := generateHexTokens(existingUser.ID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate tokens: %w", err)
 	}
 
-	// Return the tokens and user info, including the profile data
+	// Return the tokens and user info
 	return map[string]interface{}{
 		"access_token":  accessToken,
 		"refresh_token": refreshToken,
