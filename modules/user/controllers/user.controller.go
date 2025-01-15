@@ -182,6 +182,7 @@ func LoginTwitter(c *gin.Context) {
 		Email                  string `json:"email"`
 		Image                  string `json:"image"`
 		ProfileBackgroundImage string `json:"background_image"`
+		ProfileBackgroundColor string `json:"background_color"`
 		TwitterID              string `json:"twitter_id"`
 	}
 
@@ -203,6 +204,7 @@ func LoginTwitter(c *gin.Context) {
 		request.Email,
 		request.Image,
 		request.ProfileBackgroundImage,
+		request.ProfileBackgroundColor,
 		request.TwitterID,
 	)
 	if err != nil {

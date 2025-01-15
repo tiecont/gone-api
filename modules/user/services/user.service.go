@@ -228,13 +228,13 @@ func LoginGoogle(googleToken string) (map[string]interface{}, error) {
 	}, nil
 }
 
-func LoginTwitter(username, email, image, profileBackgroundImage, twitterId string) (map[string]interface{}, error) {
+func LoginTwitter(username, email, image, profileBackgroundImage, profileBackgroundColor, twitterId string) (map[string]interface{}, error) {
 	db := config.DB
 
 	// Check if the user exists by email
 	var existingUser Users.User
 	if err := db.Where("email = ?", email).First(&existingUser).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			// If user doesn't exist, create a new user
 			newUser := Users.User{
 				TwitterID: twitterId,
@@ -248,10 +248,11 @@ func LoginTwitter(username, email, image, profileBackgroundImage, twitterId stri
 
 			// Create a profile for the new user
 			newProfile := Profiles.Profile{
-				UserID:     newUser.ID,
-				ProfilePic: image,
-				CoverPhoto: profileBackgroundImage,
-				Birthday:   nil,
+				UserID:          newUser.ID,
+				ProfilePic:      image,
+				CoverPhoto:      profileBackgroundImage,
+				BackgroundColor: profileBackgroundColor,
+				Birthday:        nil,
 			}
 			if err := db.Create(&newProfile).Error; err != nil {
 				return nil, fmt.Errorf("failed to create profile: %v", err)
@@ -274,10 +275,11 @@ func LoginTwitter(username, email, image, profileBackgroundImage, twitterId stri
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				// Create a new profile if none exists
 				newProfile := Profiles.Profile{
-					UserID:     existingUser.ID,
-					ProfilePic: image,
-					CoverPhoto: profileBackgroundImage,
-					Birthday:   nil,
+					UserID:          existingUser.ID,
+					ProfilePic:      image,
+					CoverPhoto:      profileBackgroundImage,
+					BackgroundColor: profileBackgroundColor,
+					Birthday:        nil,
 				}
 				if err := db.Create(&newProfile).Error; err != nil {
 					return nil, fmt.Errorf("failed to create profile: %v", err)
@@ -293,6 +295,7 @@ func LoginTwitter(username, email, image, profileBackgroundImage, twitterId stri
 			}
 			if existingProfile.CoverPhoto == "" && profileBackgroundImage != "" {
 				existingProfile.CoverPhoto = profileBackgroundImage
+				existingProfile.BackgroundColor = profileBackgroundColor
 			}
 			if err := db.Save(&existingProfile).Error; err != nil {
 				return nil, fmt.Errorf("failed to update profile: %v", err)
