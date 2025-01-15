@@ -11,4 +11,4 @@ fi
 
 # Start the application with Air
 echo "Starting the application with Air..."
-exec air
+air
