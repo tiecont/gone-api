@@ -51,8 +51,8 @@ func RegisterUser(user Users.User) (map[string]interface{}, error) {
 	db := config.DB
 
 	// Step 1: Validate input data
-	if user.Username == "" || user.Email == "" || user.Password == "" {
-		return nil, errors.New("all fields (username, email, password) are required")
+	if user.Email == "" || user.Password == "" {
+		return nil, errors.New("all fields (email, password) are required")
 	}
 
 	// Step 2: Check if the email already exists in the database
@@ -70,13 +70,27 @@ func RegisterUser(user Users.User) (map[string]interface{}, error) {
 	}
 	user.Password = string(hashedPassword)
 
-	// Step 4: Create the new user in the database
-	if err := db.Create(&user).Error; err != nil {
-		// Error occurred while creating user in the database
-		return nil, fmt.Errorf("failed to create user: %v", err.Error())
+	newUser := Users.User{
+		Email:    user.Email,
+		Password: user.Password,
+		RoleID:   2, // Default for new user
+	}
+	if err := db.Create(&newUser).Error; err != nil {
+		return nil, fmt.Errorf("failed to create user: %v", err)
 	}
 
-	// Step 5: Format the response to exclude sensitive data
+	// Step 5: Create a default profile for the new user
+	defaultProfile := Profiles.Profile{
+		UserID:   newUser.ID,
+		Birthday: nil, // Default birthday (not set)
+	}
+
+	// Step 6: Save the profile to the database
+	if err := db.Create(&defaultProfile).Error; err != nil {
+		return nil, fmt.Errorf("failed to create profile: %v", err)
+	}
+
+	// Step 7: Format the response to exclude sensitive data
 	response := map[string]interface{}{
 		"id":         user.ID,
 		"username":   user.Username,
@@ -85,56 +99,54 @@ func RegisterUser(user Users.User) (map[string]interface{}, error) {
 		"role_id":    user.RoleID,
 		"twitter_id": user.TwitterID,
 		"google_id":  user.GoogleID,
+		"profile": map[string]interface{}{
+			"profile_pic":      defaultProfile.ProfilePic,
+			"cover_photo":      defaultProfile.CoverPhoto,
+			"background_color": defaultProfile.BackgroundColor,
+			"sex":              defaultProfile.Sex,
+			"birthday":         defaultProfile.Birthday,
+			"location":         defaultProfile.Location,
+			"bio":              defaultProfile.Bio,
+			"created_at":       defaultProfile.CreatedAt,
+			"updated_at":       defaultProfile.UpdatedAt,
+		},
 		"created_at": user.CreatedAt,
 		"updated_at": user.UpdatedAt,
 	}
 
-	// Step 6: Return the formatted response
+	// Step 8: Return the formatted response
 	return response, nil
 }
 
-func LoginUser(email, phoneNumber, password, googleToken, twitterID string) (map[string]interface{}, int, error) {
+func LoginUser(email, phoneNumber, password, username string) (map[string]interface{}, int, error) {
 	db := config.DB
 
-	// Step 1: Check for Google Login
-	if googleToken != "" {
-		result, err := LoginGoogle(googleToken)
-		if err != nil {
-			return nil, http.StatusUnauthorized, errors.New("invalid Google token")
-		}
-		return result, http.StatusOK, nil
-	}
-
-	// Step 2: Check for Facebook Login
-	if twitterID != "" {
-		log.Println(twitterID)
-	}
-
-	// Step 3: Regular Login (if GoogleID and TwitterID are not provided)
+	// Step 1: Check if the user exists
 	var existingUser Users.User
-	if err := db.Where("email = ? OR phone_number = ?", email, phoneNumber).First(&existingUser).Error; err != nil {
-		return nil, http.StatusNotFound, errors.New("invalid email, phone number, or user not found")
+	if err := db.Where("status = true AND (email = ? OR phone_number = ? OR username = ?)", email, phoneNumber, username).First(&existingUser).Error; err != nil {
+		return nil, http.StatusUnauthorized, errors.New("invalid user")
 	}
 
-	// Step 4: Validate Password
+	// Step 2: Validate the password
 	if err := bcrypt.CompareHashAndPassword([]byte(existingUser.Password), []byte(password)); err != nil {
-		return nil, http.StatusUnauthorized, errors.New("invalid password")
-	}
-	err := DeleteAllTokensByUserID(existingUser.ID)
-	if err != nil {
-		return nil, 0, err
-	}
-	// Step 5: Generate Hex Tokens
-	accessToken, refreshToken, err := generateHexTokens(existingUser.ID)
-	if err != nil {
-		return nil, http.StatusInternalServerError, errors.New("failed to generate tokens")
+		return nil, http.StatusUnauthorized, errors.New("invalid credentials")
 	}
 
-	// Return the tokens with success status
-	return map[string]interface{}{
-		"access_token":  accessToken,
-		"refresh_token": refreshToken,
-	}, http.StatusOK, nil
+	// Step 3: Generate a 6-digit verification code
+	verificationCode := generateVerificationCode()
+
+	// Step 4: Save the verification code to the database
+	if err := saveVerificationCode(existingUser.Email, verificationCode); err != nil {
+		return nil, http.StatusInternalServerError, errors.New("failed to save verification code")
+	}
+
+	// Step 5: Send the verification code via email
+	if err := sendVerificationEmail(existingUser.Email, verificationCode); err != nil {
+		return nil, http.StatusInternalServerError, errors.New("failed to send verification email")
+	}
+
+	// Step 6: Return nil on success
+	return nil, http.StatusOK, nil
 }
 
 // LoginGoogle Google
@@ -174,7 +186,7 @@ func LoginGoogle(googleToken string) (map[string]interface{}, error) {
 	db := config.DB
 	var existingUser Users.User
 	if err := db.Where("email = ?", googleUserInfo.Email).First(&existingUser).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			// If user doesn't exist, create a new user
 			newUser := Users.User{
 				GoogleID: googleUserInfo.Sub,
@@ -392,4 +404,133 @@ func DeleteAllTokensByUserID(userID uint) error {
 	}
 
 	return nil
+}
+
+func RefreshAccessToken(token, clientID string) (map[string]interface{}, error) {
+	tx := config.DB.Begin()
+	if tx.Error != nil {
+		return nil, fmt.Errorf("failed to begin transaction: %v", tx.Error)
+	}
+
+	// Check if the refresh token is valid
+	var refreshToken RefreshTokens.RefreshToken
+	if err := tx.Where("token = ? AND user_id = ?", token, clientID).First(&refreshToken).Error; err != nil {
+		tx.Rollback()
+		return nil, fmt.Errorf("invalid or expired refresh token: %v", err)
+	}
+
+	// Delete old access tokens for the user
+	if err := tx.Where("user_id = ?", refreshToken.UserID).Delete(&AccessTokens.AccessToken{}).Error; err != nil {
+		tx.Rollback()
+		return nil, fmt.Errorf("failed to delete old access tokens: %v", err)
+	}
+
+	// Generate a new access token
+	token, err := GenerateAccessToken()
+	if err != nil {
+		tx.Rollback()
+		return nil, fmt.Errorf("failed to generate new access token: %v", err)
+	}
+
+	newAccessToken := AccessTokens.AccessToken{
+		Token:  token,
+		UserID: refreshToken.UserID,
+		Status: true,
+	}
+
+	if err := tx.Create(&newAccessToken).Error; err != nil {
+		tx.Rollback()
+		return nil, fmt.Errorf("failed to create new access token: %v", err)
+	}
+
+	// Commit the transaction
+	if err := tx.Commit().Error; err != nil {
+		tx.Rollback()
+		return nil, fmt.Errorf("failed to commit transaction: %v", err)
+	}
+
+	// Return the new access token
+	response := map[string]interface{}{
+		"access_token": newAccessToken.Token,
+		"expires_at":   newAccessToken.ExpiresAt,
+	}
+
+	return response, nil
+}
+
+func GenerateAccessToken() (string, error) {
+	// Generate random bytes for the token
+	tokenBytes := make([]byte, 32) // 256-bit token
+	if _, err := rand.Read(tokenBytes); err != nil {
+		return "", fmt.Errorf("failed to generate access token: %v", err)
+	}
+
+	// Encode the random bytes to a hexadecimal string
+	accessToken := hex.EncodeToString(tokenBytes)
+
+	return accessToken, nil
+}
+
+func ForgotPassword(email string) (int, error) {
+	db := config.DB
+	// Step 1: Check user?
+	var user Users.User
+	if err := db.Where("email = ?", email).First(&user).Error; err != nil {
+		return http.StatusBadRequest, errors.New("user not found")
+	}
+	// Step 2: Generate 6 digits code
+	verificationCode := generateVerificationCode()
+
+	// Step 3: Save the verification code to the database
+	if err := saveVerificationCode(email, verificationCode); err != nil {
+		return http.StatusInternalServerError, errors.New("failed to save verification code")
+	}
+
+	// Step 4: Send the verification code via email
+	if err := sendVerificationEmail(email, verificationCode); err != nil {
+		return http.StatusInternalServerError, errors.New("failed to send verification email")
+	}
+
+	return http.StatusOK, nil
+}
+
+func ChangePassword(oldPassword, newPassword, userID string) (int, error) {
+	// Start a database transaction
+	tx := config.DB.Begin()
+	var user Users.User
+
+	// Step 1: Check if the user exists
+	if err := tx.Where("id = ?", userID).First(&user).Error; err != nil {
+		tx.Rollback()
+		return http.StatusNotFound, errors.New("user not found")
+	}
+
+	// Step 2: Validate the old password
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(oldPassword)); err != nil {
+		tx.Rollback()
+		return http.StatusUnauthorized, errors.New("old password is incorrect")
+	}
+
+	// Step 3: Hash the new password
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		tx.Rollback()
+		return http.StatusInternalServerError, errors.New("failed to hash new password")
+	}
+
+	// Step 4: Update the password in the database
+	user.Password = string(hashedPassword)
+	if err := tx.Save(&user).Error; err != nil {
+		tx.Rollback()
+		return http.StatusInternalServerError, errors.New("failed to save new password")
+	}
+
+	// Commit the transaction
+	if err := tx.Commit().Error; err != nil {
+		tx.Rollback()
+		return http.StatusInternalServerError, errors.New("failed to commit transaction")
+	}
+
+	// Step 5: Return success response
+	return http.StatusOK, nil
 }
