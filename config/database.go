@@ -80,6 +80,9 @@ func runMigrations(db *gorm.DB) error {
 		Posts.MigratePostLike,
 		Posts.MigrateMedia,
 		Posts.MigratePostShare,
+
+		// Add Tables for future
+		Users.MigrateVerificationCode,
 	}
 
 	// Iterate through all migrations

@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -92,11 +93,10 @@ func RegisterUser(c *gin.Context) {
 func LoginUser(c *gin.Context) {
 	// Define a struct to parse the incoming JSON request body
 	var request struct {
-		Email         string `json:"email"`
-		PhoneNumber   string `json:"phone_number"`
-		Password      string `json:"password"`
-		FacebookToken string `json:"facebook_token"`
-		GoogleToken   string `json:"google_token"`
+		Email       string `json:"email"`
+		Username    string `json:"username"`
+		PhoneNumber string `json:"phone_number"`
+		Password    string `json:"password"`
 	}
 
 	// Bind the JSON body to the struct
@@ -112,7 +112,7 @@ func LoginUser(c *gin.Context) {
 	}
 
 	// Call the LoginUser service
-	response, status, err := services.LoginUser(request.Email, request.PhoneNumber, request.Password, request.GoogleToken, request.FacebookToken)
+	response, status, err := services.LoginUser(request.Email, request.PhoneNumber, request.Password, request.Username)
 	if err != nil {
 		c.JSON(status, gin.H{
 			"status": gin.H{
@@ -127,7 +127,7 @@ func LoginUser(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"status": gin.H{
 			"code":    http.StatusOK,
-			"message": "Login successful",
+			"message": "Verification code sent to your email. Please verify to proceess.",
 		},
 		"data": response,
 	})
@@ -224,5 +224,136 @@ func LoginTwitter(c *gin.Context) {
 			"message": "Login successful",
 		},
 		"data": response,
+	})
+}
+
+// Refresh token
+
+func RefreshAccessToken(c *gin.Context) {
+	// Step 1: Get the refresh-token from header
+	authHeader := c.GetHeader("x-rtoken-id")
+	clientID := c.GetHeader("x-client-id")
+
+	// Return error
+	if authHeader == "" || clientID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"status": gin.H{
+				"code":    http.StatusUnauthorized,
+				"message": "missing token or client id on header",
+			},
+		})
+		return
+	}
+
+	// Step 2: Extract the Bearer token
+	tokenParts := strings.Split(authHeader, " ")
+	if len(tokenParts) != 2 || strings.ToLower(tokenParts[0]) != "bearer" {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"status": gin.H{
+				"code":    http.StatusUnauthorized,
+				"message": "invalid token header format",
+			}})
+		return
+	}
+	accessToken := tokenParts[1]
+
+	// Call the service to verify the code and generate tokens
+	response, err := services.RefreshAccessToken(accessToken, clientID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status": gin.H{
+				"code":    http.StatusInternalServerError,
+				"message": "Failed to get user",
+			},
+			"error": err.Error(),
+		})
+		return
+	}
+
+	// Success response
+	c.JSON(http.StatusOK, gin.H{
+		"status": gin.H{
+			"code":    http.StatusOK,
+			"message": "Verification successful",
+		},
+		"data": response,
+	})
+}
+
+func ForgotPassword(c *gin.Context) {
+	// Read and log the raw request body
+	body, _ := io.ReadAll(c.Request.Body)
+	// Reset the request body for further processing
+	c.Request.Body = io.NopCloser(bytes.NewBuffer(body))
+	var request struct {
+		Email string `json:"email"`
+	}
+	// Bind JSON to the struct
+	if err := c.ShouldBindJSON(&request); err != nil {
+		log.Println("Error binding JSON:", err)
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status": gin.H{
+				"code":    http.StatusBadRequest,
+				"message": "Invalid input",
+			},
+			"error": err.Error(),
+		})
+		return
+	}
+
+	var status, err = services.ForgotPassword(request.Email)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status": gin.H{
+				"code":    status,
+				"message": "Forbidden",
+			},
+			"error": err.Error(),
+		})
+		return
+	}
+
+	// Success response
+	c.JSON(http.StatusOK, gin.H{
+		"status": gin.H{
+			"code":    http.StatusOK,
+			"message": "Verification email had been sent",
+		},
+	})
+}
+
+func ChangePassword(c *gin.Context) {
+	body, _ := io.ReadAll(c.Request.Body)
+	c.Request.Body = io.NopCloser(bytes.NewBuffer(body))
+	var request struct {
+		OldPassword string `json:"old_password"`
+		NewPassword string `json:"new_password"`
+		UserID      uint   `json:"user_id"`
+	}
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status": gin.H{
+				"code":    http.StatusBadRequest,
+				"message": "Invalid input",
+			},
+		})
+		return
+	}
+	status, err := services.ChangePassword(request.OldPassword, request.NewPassword, strconv.Itoa(int(request.UserID)))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status": gin.H{
+				"code":    status,
+				"message": "Failed to change password",
+			},
+		})
+		return
+	}
+	// Return results
+	c.JSON(http.StatusOK, gin.H{
+		"status": gin.H{
+			"code":    status,
+			"message": "Successfully changed password",
+		},
 	})
 }
