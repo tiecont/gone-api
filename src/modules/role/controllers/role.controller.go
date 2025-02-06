@@ -31,6 +31,7 @@ func CreateRole(c *gin.Context) {
 				"message": err.Error(),
 			},
 		})
+		return
 	}
 	c.JSON(http.StatusCreated, gin.H{
 		"status": gin.H{
@@ -50,6 +51,7 @@ func ListRoles(c *gin.Context) {
 				"message": err.Error(),
 			},
 		})
+		return
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"status": gin.H{

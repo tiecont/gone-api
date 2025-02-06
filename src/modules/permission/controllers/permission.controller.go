@@ -9,15 +9,19 @@ import (
 func CreatePermission(c *gin.Context) {
 	var request struct {
 		PermissionName string `json:"name"`
-		RoleID         uint   `json:"role_id"`
 	}
 	if err := c.ShouldBindJSON(&request); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	isCreated := services.CreatePermission(request.RoleID, request.PermissionName)
+	isCreated, err := services.CreatePermission(request.PermissionName)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 	if !isCreated {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "An error occurred during creating permission"})
+		return
 	}
 	c.JSON(http.StatusCreated, gin.H{
 		"status": gin.H{
@@ -28,28 +32,45 @@ func CreatePermission(c *gin.Context) {
 }
 
 func ListPermissions(c *gin.Context) {
-	var request struct {
-		RoleID uint `json:"role_id"`
-	}
-	// Bind the JSON body to the struct
-	if err := c.ShouldBindJSON(&request); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"status": gin.H{
-				"code":    http.StatusBadRequest,
-				"message": "Invalid input",
-			},
-			"error": err.Error(),
-		})
-		return
-	}
-	results, err := services.ListAllPermission(request.RoleID)
+	results, err := services.ListAllPermissions()
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"status": gin.H{
 			"code":    http.StatusOK,
-			"message": "Permissions List Successfully",
+			"message": "Successfully Get All Permissions",
+		},
+		"data": results,
+	})
+}
+
+func AssignPermissionsToRole(c *gin.Context) {
+	var request struct {
+		RoleID        uint   `json:"role_id"`
+		PermissionIDs []uint `json:"permission_ids"`
+	}
+
+	// Validate request payload
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Call service function
+	results, err := services.AddPermissionsToRole(request.RoleID, request.PermissionIDs)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Return response
+	c.JSON(http.StatusOK, gin.H{
+		"status": gin.H{
+			"code":    http.StatusOK,
+			"message": "Permissions Assigned Successfully",
 		},
 		"data": results,
 	})

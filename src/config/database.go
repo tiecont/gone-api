@@ -65,6 +65,7 @@ func runMigrations(db *gorm.DB) error {
 
 		// Permission model
 		Permissions.MigratePermissions,
+		Roles.MigrateRolePermissions,
 
 		// Access and Refresh Tokens
 		AccessTokens.MigrateAccessTokens,

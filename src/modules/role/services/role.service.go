@@ -35,7 +35,7 @@ func GetRoleByUserID(userID uint) (*models.Role, error) {
 }
 
 // CreateRoleByAdmin creates a new role with the given name
-func CreateRoleByAdmin(roleName string) (*models.Role, error) {
+func CreateRoleByAdmin(roleName string) (map[string]interface{}, error) {
 	db := config.DB
 
 	// Validate input
@@ -58,7 +58,10 @@ func CreateRoleByAdmin(roleName string) (*models.Role, error) {
 		return nil, err
 	}
 
-	return role, nil
+	return gin.H{
+		"id":   role.ID,
+		"name": roleName,
+	}, nil
 }
 
 func ListAllRoles() ([]map[string]interface{}, error) {
