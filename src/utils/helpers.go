@@ -1,6 +1,9 @@
 package utils
 
-import "math"
+import (
+	"math"
+	"strconv"
+)
 
 func Paginate(total int64, page, perPage int) (map[string]interface{}, error) {
 	// Avoid division by zero
@@ -24,11 +27,19 @@ func Paginate(total int64, page, perPage int) (map[string]interface{}, error) {
 
 	// Construct and return pagination data
 	return map[string]interface{}{
-		"current_page":  page,
-		"item_per_page": perPage,
-		"next_page":     nextPage,
-		"previous_page": prevPage,
-		"total_count":   total,
-		"total_pages":   totalPages,
+		"current_page":   page,
+		"items_per_page": perPage,
+		"next_page":      nextPage,
+		"previous_page":  prevPage,
+		"total_count":    total,
+		"total_pages":    totalPages,
 	}, nil
+}
+
+func ConvertStringToInt64(str string) int64 {
+	i, err := strconv.ParseInt(str, 10, 64)
+	if err != nil {
+		panic(err)
+	}
+	return i
 }
