@@ -30,6 +30,9 @@ func main() {
 		MaxAge:           12 * time.Hour,
 	}))
 
+	// Set static files
+	router.Static("/uploads", "./uploads")
+
 	// WebSocket route
 	router.GET("/ws", services.WebSocketHandler)
 

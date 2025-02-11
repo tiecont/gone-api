@@ -170,7 +170,7 @@ func VerifyCode(code, email string) (map[string]interface{}, error) {
 	if err := db.Create(&accessTokenEntry).Error; err != nil {
 		return nil, fmt.Errorf("failed to save access token")
 	}
-
+	
 	// Step 9: Return the token and user ID
 	response := map[string]interface{}{
 		"token":   accessTokenEntry.Token,

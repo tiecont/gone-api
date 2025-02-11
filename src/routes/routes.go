@@ -38,21 +38,22 @@ func RegisterRoutes(router *gin.Engine) {
 	// Post Group APIs
 	postsRoutes := api.Group("/posts")
 	{
-		postsRoutes.GET("categories", authMiddleware(), authzMiddleware(needPermission["ALLOW_LIST_CATEGORIES"]), PostControllers.ListCategories) // 11
-		postsRoutes.POST("create", authMiddleware(), authzMiddleware(needPermission["ALLOW_CREATE_POST"]), PostControllers.CreatePost)            // 12
+		postsRoutes.GET("categories", authMiddleware(), PostControllers.ListCategories) // 11
+		postsRoutes.POST("", authMiddleware(), PostControllers.ListAllPost)             // 12
+		postsRoutes.POST("create", authMiddleware(), PostControllers.CreatePost)        // 13
 	}
 
 	// Role Group APIs
 	rolesRoutes := api.Group("/roles")
 	{
-		rolesRoutes.POST("list", authMiddleware(), authzMiddleware(needPermission["ALLOW_LIST_ROLES"]), RoleControllers.ListRoles)     // 13
-		rolesRoutes.POST("create", authMiddleware(), authzMiddleware(needPermission["ALLOW_CREATE_ROLE"]), RoleControllers.CreateRole) // 14
+		rolesRoutes.POST("list", authMiddleware(), authzMiddleware(needPermission["ALLOW_LIST_ROLES"]), RoleControllers.ListRoles)     // 14
+		rolesRoutes.POST("create", authMiddleware(), authzMiddleware(needPermission["ALLOW_CREATE_ROLE"]), RoleControllers.CreateRole) // 15
 	}
 	// Permission Group APIs
 	permissionsRoutes := api.Group("/permissions")
 	{
-		permissionsRoutes.POST("list", authMiddleware(), authzMiddleware(needPermission["ALLOW_LIST_PERMISSIONS"]), PermissionController.ListPermissions)             // 15
-		permissionsRoutes.POST("create", authMiddleware(), authzMiddleware(needPermission["ALLOW_CREATE_PERMISSION"]), PermissionController.CreatePermission)         // 16
-		permissionsRoutes.POST("assign", authMiddleware(), authzMiddleware(needPermission["ALLOW_ASSIGN_PERMISSIONS"]), PermissionController.AssignPermissionsToRole) // 17
+		permissionsRoutes.POST("list", authMiddleware(), authzMiddleware(needPermission["ALLOW_LIST_PERMISSIONS"]), PermissionController.ListPermissions)             // 16
+		permissionsRoutes.POST("create", authMiddleware(), authzMiddleware(needPermission["ALLOW_CREATE_PERMISSION"]), PermissionController.CreatePermission)         // 17
+		permissionsRoutes.POST("assign", authMiddleware(), authzMiddleware(needPermission["ALLOW_ASSIGN_PERMISSIONS"]), PermissionController.AssignPermissionsToRole) // 18
 	}
 }
