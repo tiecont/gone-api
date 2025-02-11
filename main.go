@@ -1,7 +1,9 @@
 package main
 
 import (
-	"gone-be/services"
+	"gone-be/src/config"
+	"gone-be/src/routes"
+	"gone-be/src/services"
 	"log"
 	"os"
 	"time"
@@ -9,8 +11,6 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
-	"gone-be/config"
-	"gone-be/routes"
 )
 
 func main() {
@@ -29,6 +29,9 @@ func main() {
 		AllowCredentials: true,
 		MaxAge:           12 * time.Hour,
 	}))
+
+	// Set static files
+	router.Static("/uploads", "./uploads")
 
 	// WebSocket route
 	router.GET("/ws", services.WebSocketHandler)
