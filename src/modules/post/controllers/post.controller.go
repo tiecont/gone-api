@@ -26,7 +26,8 @@ func CreatePost(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse form data"})
 		return
 	}
-	files := form.File["images"] // Get all uploaded images
+	// Handle Receive multiple media
+	files := form.File["media"]
 
 	if len(files) == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "At least one image file is required"})

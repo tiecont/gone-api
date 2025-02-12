@@ -48,6 +48,7 @@ func SaveUploadedFile(file *multipart.FileHeader, dst string) error {
 func CreatePost(title string, content string, categoryIDs []string, files []*multipart.FileHeader, userID uint) (map[string]interface{}, error) {
 	db := config.DB
 
+	fmt.Print(categoryIDs)
 	// Step 1: Process & Save Media Files (Images & Videos)
 	var savedMedia []models.Media
 
@@ -173,17 +174,24 @@ func List(currentPage int, itemsPerPage int, orderBy string, sortBy string, sear
 	rows, err := db.Table("posts").
 		Select(`
 			posts.id, posts.title, posts.content, posts.created_at, posts.updated_at,
+			users.id AS user_id, users.username AS username, profile.profile_pic,
 			GROUP_CONCAT(DISTINCT categories.id ORDER BY categories.id ASC SEPARATOR ',') AS category_ids,
 			GROUP_CONCAT(DISTINCT categories.name ORDER BY categories.id ASC SEPARATOR ',') AS category_names,
 			GROUP_CONCAT(DISTINCT media.id ORDER BY media.id ASC SEPARATOR ',') AS media_ids,
 			GROUP_CONCAT(DISTINCT media.path ORDER BY media.id ASC SEPARATOR ',') AS media_paths,
 			GROUP_CONCAT(DISTINCT media.type ORDER BY media.id ASC SEPARATOR ',') AS media_types,
-			GROUP_CONCAT(DISTINCT media.status ORDER BY media.id ASC SEPARATOR ',') AS media_statuses
+			GROUP_CONCAT(DISTINCT media.status ORDER BY media.id ASC SEPARATOR ',') AS media_statuses,
+			COUNT(comments.id) AS comment_count, COUNT(post_likes.id) AS likes_count, COUNT(post_shares.id) AS shares_count
 		`).
 		Joins(`
 			LEFT JOIN post_categories ON post_categories.post_id = posts.id
 			LEFT JOIN categories ON categories.id = post_categories.category_id
 			LEFT JOIN media ON media.post_id = posts.id
+			LEFT JOIN users ON users.id = post.user_id
+			LEFT JOIN profiles ON profiles.user_id = user.id
+			LEFT JOIN comments ON comments.post_id = post.id
+			LEFT JOIN post_likes ON post_likes.post_id = post.id
+			LEFT JOIN post_shares ON post_shares.post_id = post.id
 		`).
 		Where("LOWER(posts.content) LIKE LOWER(?)", "%"+searchValue+"%").
 		Group("posts.id").
@@ -201,15 +209,17 @@ func List(currentPage int, itemsPerPage int, orderBy string, sortBy string, sear
 	var totalCount int64
 
 	for rows.Next() {
-		var postID uint
+		var postID, userID uint
 		var title, content sql.NullString
 		var createdAt, updatedAt time.Time
 		var categoryIDs, categoryNames, mediaIDs, mediaPaths, mediaTypes, mediaStatuses sql.NullString
-
+		var username, profilePic string
+		var commentsCount
 		if err := rows.Scan(
 			&postID, &title, &content, &createdAt, &updatedAt,
 			&categoryIDs, &categoryNames,
 			&mediaIDs, &mediaPaths, &mediaTypes, &mediaStatuses,
+			&username, &profilePic, &userID,
 		); err != nil {
 			return nil, err
 		}
