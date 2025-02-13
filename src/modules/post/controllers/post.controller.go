@@ -50,9 +50,9 @@ func CreatePost(c *gin.Context) {
 	// Type assertion (since c.Get returns an interface{})
 	currentUser, _ := user.(*model.User)
 	// Step 4: Call the service to create a post
-	result, err := services.CreatePost(title, content, categoryIds, files, currentUser.ID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	result, serviceError := services.CreatePost(title, content, categoryIds, files, currentUser.ID)
+	if serviceError != nil {
+		c.JSON(serviceError.StatusCode, gin.H{"error": serviceError.Message})
 		return
 	}
 
