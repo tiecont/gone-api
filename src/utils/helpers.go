@@ -43,3 +43,13 @@ func ConvertStringToInt64(str string) int64 {
 	}
 	return i
 }
+
+// ServiceError to define return exception for system
+type ServiceError struct {
+	StatusCode int
+	Message    string
+}
+
+func (e *ServiceError) Error() string {
+	return e.Message
+}

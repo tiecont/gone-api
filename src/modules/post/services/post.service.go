@@ -4,11 +4,13 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/gin-gonic/gin"
 	"gone-be/src/config"
 	"gone-be/src/modules/post/models"
 	"gone-be/src/utils"
 	"io"
 	"mime/multipart"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -21,6 +23,7 @@ var allowedMediaTypes = map[string]bool{
 	"image/jpeg": true,
 	"image/png":  true,
 	"image/gif":  true,
+	"image/webp": true,
 	"video/mp4":  true,
 	"video/avi":  true,
 	"video/mov":  true,
@@ -44,18 +47,19 @@ func SaveUploadedFile(file *multipart.FileHeader, dst string) error {
 	return err
 }
 
-// CreatePost handles post creation logic
-func CreatePost(title string, content string, categoryIDs []string, files []*multipart.FileHeader, userID uint) (map[string]interface{}, error) {
+func CreatePost(title string, content string, categoryIDs []string, files []*multipart.FileHeader, userID uint) (map[string]interface{}, *utils.ServiceError) {
 	db := config.DB
 
-	// Step 1: Process & Save Media Files (Images & Videos)
 	var savedMedia []models.Media
 
 	for _, file := range files {
 		// Validate file type
 		fileType := file.Header.Get("Content-Type")
 		if !allowedMediaTypes[fileType] {
-			return nil, errors.New("invalid file format. Allowed: JPEG, PNG, GIF, MP4, AVI, MOV")
+			return nil, &utils.ServiceError{
+				StatusCode: http.StatusBadRequest,
+				Message:    "Invalid file format. Allowed: JPEG, PNG, GIF, MP4, AVI, MOV",
+			}
 		}
 
 		// Generate unique file name
@@ -64,7 +68,10 @@ func CreatePost(title string, content string, categoryIDs []string, files []*mul
 
 		// Save file to disk
 		if err := SaveUploadedFile(file, mediaPath); err != nil {
-			return nil, err
+			return nil, &utils.ServiceError{
+				StatusCode: http.StatusInternalServerError,
+				Message:    "Failed to save file",
+			}
 		}
 
 		// Append to saved media list
@@ -74,10 +81,13 @@ func CreatePost(title string, content string, categoryIDs []string, files []*mul
 		})
 	}
 
-	// Step 2: Store post & categories in database (Transaction)
+	// Start database transaction
 	tx := db.Begin()
 	if tx.Error != nil {
-		return nil, errors.New("failed to start transaction")
+		return nil, &utils.ServiceError{
+			StatusCode: http.StatusInternalServerError,
+			Message:    "Failed to start transaction",
+		}
 	}
 
 	// Create post
@@ -88,7 +98,10 @@ func CreatePost(title string, content string, categoryIDs []string, files []*mul
 	}
 	if err := tx.Create(&post).Error; err != nil {
 		tx.Rollback()
-		return nil, errors.New("failed to create post")
+		return nil, &utils.ServiceError{
+			StatusCode: http.StatusInternalServerError,
+			Message:    "Failed to create post",
+		}
 	}
 
 	// Save media records (Images & Videos)
@@ -96,7 +109,10 @@ func CreatePost(title string, content string, categoryIDs []string, files []*mul
 		media.PostID = post.ID
 		if err := tx.Create(&media).Error; err != nil {
 			tx.Rollback()
-			return nil, errors.New("failed to save media")
+			return nil, &utils.ServiceError{
+				StatusCode: http.StatusInternalServerError,
+				Message:    "Failed to save media",
+			}
 		}
 	}
 
@@ -106,7 +122,10 @@ func CreatePost(title string, content string, categoryIDs []string, files []*mul
 		id, err := strconv.Atoi(categoryID)
 		if err != nil {
 			tx.Rollback()
-			return nil, errors.New("invalid category ID")
+			return nil, &utils.ServiceError{
+				StatusCode: http.StatusBadRequest,
+				Message:    "Invalid category ID",
+			}
 		}
 		postCategories = append(postCategories, models.PostCategory{
 			PostID:     post.ID,
@@ -117,7 +136,10 @@ func CreatePost(title string, content string, categoryIDs []string, files []*mul
 	if len(postCategories) > 0 {
 		if err := tx.Create(&postCategories).Error; err != nil {
 			tx.Rollback()
-			return nil, errors.New("failed to associate categories")
+			return nil, &utils.ServiceError{
+				StatusCode: http.StatusInternalServerError,
+				Message:    "Failed to associate categories",
+			}
 		}
 	}
 
@@ -173,20 +195,26 @@ func List(currentPage int, itemsPerPage int, orderBy string, sortBy string, sear
 	rows, err := db.Table("posts").
 		Select(`
 			posts.id, posts.title, posts.content, posts.created_at, posts.updated_at,
+			users.id AS user_id, users.username AS username, profiles.profile_pic,
 			GROUP_CONCAT(DISTINCT categories.id ORDER BY categories.id ASC SEPARATOR ',') AS category_ids,
 			GROUP_CONCAT(DISTINCT categories.name ORDER BY categories.id ASC SEPARATOR ',') AS category_names,
-			GROUP_CONCAT(DISTINCT media.id ORDER BY media.id ASC SEPARATOR ',') AS media_ids,
-			GROUP_CONCAT(DISTINCT media.path ORDER BY media.id ASC SEPARATOR ',') AS media_paths,
-			GROUP_CONCAT(DISTINCT media.type ORDER BY media.id ASC SEPARATOR ',') AS media_types,
-			GROUP_CONCAT(DISTINCT media.status ORDER BY media.id ASC SEPARATOR ',') AS media_statuses
+			media.id, media.path, media.type, media.status,
+			COUNT(DISTINCT comments.id) AS comment_count,
+			COUNT(DISTINCT post_likes.id) AS likes_count,
+			COUNT(DISTINCT post_shares.id) AS shares_count
 		`).
 		Joins(`
 			LEFT JOIN post_categories ON post_categories.post_id = posts.id
 			LEFT JOIN categories ON categories.id = post_categories.category_id
 			LEFT JOIN media ON media.post_id = posts.id
+			LEFT JOIN users ON users.id = posts.user_id
+			LEFT JOIN profiles ON profiles.user_id = users.id
+			LEFT JOIN comments ON comments.post_id = posts.id
+			LEFT JOIN post_likes ON post_likes.post_id = posts.id
+			LEFT JOIN post_shares ON post_shares.post_id = posts.id
 		`).
 		Where("LOWER(posts.content) LIKE LOWER(?)", "%"+searchValue+"%").
-		Group("posts.id").
+		Group("posts.id, users.id, users.username, profiles.profile_pic, media.id").
 		Order(fmt.Sprintf("posts.%s %s", orderBy, sortBy)).
 		Offset(offset).
 		Limit(itemsPerPage).
@@ -197,71 +225,94 @@ func List(currentPage int, itemsPerPage int, orderBy string, sortBy string, sear
 	defer rows.Close()
 
 	// **🔹 Process Query Results**
-	var items []map[string]interface{}
+	postMap := make(map[uint]map[string]interface{})
 	var totalCount int64
 
 	for rows.Next() {
-		var postID uint
+		var postID, userID uint
 		var title, content sql.NullString
 		var createdAt, updatedAt time.Time
-		var categoryIDs, categoryNames, mediaIDs, mediaPaths, mediaTypes, mediaStatuses sql.NullString
+		var categoryIDs, categoryNames sql.NullString
+		var mediaID, mediaStatus sql.NullInt64
+		var mediaPath, mediaType sql.NullString
+		var username, profilePic sql.NullString
+		var commentsCount, likesCount, sharesCount int
 
+		// **🔹 Scan Row**
 		if err := rows.Scan(
 			&postID, &title, &content, &createdAt, &updatedAt,
+			&userID, &username, &profilePic,
 			&categoryIDs, &categoryNames,
-			&mediaIDs, &mediaPaths, &mediaTypes, &mediaStatuses,
+			&mediaID, &mediaPath, &mediaType, &mediaStatus,
+			&commentsCount, &likesCount, &sharesCount,
 		); err != nil {
 			return nil, err
 		}
 
-		// Parse categories
-		var categories []map[string]interface{}
-		if categoryIDs.Valid {
-			idList := strings.Split(categoryIDs.String, ",")
-			nameList := strings.Split(categoryNames.String, ",")
-			for i := range idList {
-				categories = append(categories, map[string]interface{}{
-					"id":   utils.ConvertStringToInt64(idList[i]),
-					"name": nameList[i],
-				})
-			}
-		}
-
-		// Parse media
-		var images []map[string]interface{}
-		var videos []map[string]interface{}
-		if mediaIDs.Valid {
-			idList := strings.Split(mediaIDs.String, ",")
-			pathList := strings.Split(mediaPaths.String, ",")
-			typeList := strings.Split(mediaTypes.String, ",")
-			statusList := strings.Split(mediaStatuses.String, ",")
-			for i := range idList {
-				mediaItem := map[string]interface{}{
-					"id":     utils.ConvertStringToInt64(idList[i]),
-					"path":   pathList[i],
-					"type":   typeList[i],
-					"status": statusList[i],
-				}
-				if strings.HasPrefix(typeList[i], "image/") {
-					images = append(images, mediaItem)
-				} else if strings.HasPrefix(typeList[i], "video/") {
-					videos = append(videos, mediaItem)
+		// **🔹 Check if Post Already Exists in Map**
+		post, exists := postMap[postID]
+		if !exists {
+			// **🔹 Parse Categories (Only Once Per Post)**
+			var categories []map[string]interface{}
+			if categoryIDs.Valid && categoryNames.Valid {
+				idList := strings.Split(categoryIDs.String, ",")
+				nameList := strings.Split(categoryNames.String, ",")
+				for i := range idList {
+					if i < len(nameList) {
+						categories = append(categories, map[string]interface{}{
+							"id":   utils.ConvertStringToInt64(idList[i]),
+							"name": nameList[i],
+						})
+					}
 				}
 			}
+
+			// **🔹 Initialize Post Data**
+			post = map[string]interface{}{
+				"id":         postID,
+				"title":      title.String,
+				"content":    content.String,
+				"categories": categories,
+				"created_at": createdAt,
+				"updated_at": updatedAt,
+				"images":     []map[string]interface{}{},
+				"videos":     []map[string]interface{}{},
+				"user": gin.H{
+					"id":          userID,
+					"name":        username.String,
+					"profile_pic": profilePic.String,
+				},
+				"comments_count": commentsCount,
+				"likes_count":    likesCount,
+				"shares_count":   sharesCount,
+			}
+
+			postMap[postID] = post
+			totalCount++
 		}
 
-		// Append post data
-		items = append(items, map[string]interface{}{
-			"id":         postID,
-			"title":      title.String,
-			"content":    content.String,
-			"categories": categories,
-			"created_at": createdAt,
-			"updated_at": updatedAt,
-			"images":     images,
-			"videos":     videos,
-		})
-		totalCount++
+		// **🔹 Process Media (Append to Existing Post)**
+		if mediaID.Valid && mediaPath.Valid && mediaType.Valid && mediaStatus.Valid {
+			status := int(mediaStatus.Int64)
+			mediaItem := map[string]interface{}{
+				"id":     mediaID.Int64,
+				"path":   mediaPath.String,
+				"type":   mediaType.String,
+				"status": status,
+			}
+
+			if strings.HasPrefix(mediaType.String, "image/") {
+				post["images"] = append(post["images"].([]map[string]interface{}), mediaItem)
+			} else if strings.HasPrefix(mediaType.String, "video/") {
+				post["videos"] = append(post["videos"].([]map[string]interface{}), mediaItem)
+			}
+		}
+	}
+
+	// **🔹 Convert Map to Slice**
+	items := make([]map[string]interface{}, 0, len(postMap))
+	for _, post := range postMap {
+		items = append(items, post)
 	}
 
 	// **🔹 Generate Pagination Metadata**
@@ -280,16 +331,13 @@ func List(currentPage int, itemsPerPage int, orderBy string, sortBy string, sear
 func GetDetails(postID string) (map[string]interface{}, error) {
 	db := config.DB
 
-	// **🔹 Fetch Post with Associated Media & Categories**
-	row := db.Table("posts").
+	// **🔹 Query for Post with Associated Media & Categories**
+	rows, err := db.Table("posts").
 		Select(`
 			posts.id, posts.title, posts.content, posts.created_at, posts.updated_at,
 			GROUP_CONCAT(DISTINCT categories.id ORDER BY categories.id ASC SEPARATOR ',') AS category_ids,
 			GROUP_CONCAT(DISTINCT categories.name ORDER BY categories.id ASC SEPARATOR ',') AS category_names,
-			GROUP_CONCAT(DISTINCT media.id ORDER BY media.id ASC SEPARATOR ',') AS media_ids,
-			GROUP_CONCAT(DISTINCT media.path ORDER BY media.id ASC SEPARATOR ',') AS media_paths,
-			GROUP_CONCAT(DISTINCT media.type ORDER BY media.id ASC SEPARATOR ',') AS media_types,
-			GROUP_CONCAT(DISTINCT media.status ORDER BY media.id ASC SEPARATOR ',') AS media_statuses
+			media.id, media.path, media.type, media.status
 		`).
 		Joins(`
 			LEFT JOIN post_categories ON post_categories.post_id = posts.id
@@ -297,64 +345,73 @@ func GetDetails(postID string) (map[string]interface{}, error) {
 			LEFT JOIN media ON media.post_id = posts.id
 		`).
 		Where("posts.id = ?", postID).
-		Group("posts.id").
-		Row()
+		Group("posts.id, media.id").
+		Rows()
 
-	// **🔹 Process Query Results**
-	var (
-		id                                              uint
-		title                                           sql.NullString
-		content                                         sql.NullString
-		createdAt, updatedAt                            time.Time
-		categoryIDs, categoryNames                      sql.NullString
-		mediaIDs, mediaPaths, mediaTypes, mediaStatuses sql.NullString
-	)
-
-	// **🔹 Scan Row into Variables**
-	err := row.Scan(&id, &title, &content, &createdAt, &updatedAt, &categoryIDs, &categoryNames, &mediaIDs, &mediaPaths, &mediaTypes, &mediaStatuses)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, errors.New("post not found")
-		}
 		return nil, err
 	}
+	defer rows.Close()
 
-	// **🔹 Parse Categories**
+	// **🔹 Initialize Storage for Data**
+	var (
+		id                         uint
+		title                      sql.NullString
+		content                    sql.NullString
+		createdAt                  time.Time
+		updatedAt                  time.Time
+		categoryIDs, categoryNames sql.NullString
+	)
+
 	var categories []map[string]interface{}
-	if categoryIDs.Valid && categoryNames.Valid {
-		idList := strings.Split(categoryIDs.String, ",")
-		nameList := strings.Split(categoryNames.String, ",")
-		for i := range idList {
-			categories = append(categories, map[string]interface{}{
-				"id":   utils.ConvertStringToInt64(idList[i]),
-				"name": nameList[i],
-			})
-		}
-	}
-
-	// **🔹 Parse Media (Separate Images & Videos)**
 	var images []map[string]interface{}
 	var videos []map[string]interface{}
-	if mediaIDs.Valid && mediaPaths.Valid && mediaTypes.Valid && mediaStatuses.Valid {
-		idList := strings.Split(mediaIDs.String, ",")
-		pathList := strings.Split(mediaPaths.String, ",")
-		typeList := strings.Split(mediaTypes.String, ",")
-		statusList := strings.Split(mediaStatuses.String, ",")
 
-		for i := range idList {
-			status, _ := strconv.Atoi(statusList[i]) // Convert status to int
-			mediaItem := map[string]interface{}{
-				"id":     utils.ConvertStringToInt64(idList[i]),
-				"path":   pathList[i],
-				"type":   typeList[i],
-				"status": status,
+	// **🔹 Iterate Over Rows to Collect Data**
+	for rows.Next() {
+		var (
+			mediaID, mediaStatus int64
+			mediaPath, mediaType sql.NullString
+		)
+
+		// **Scan Data into Variables**
+		err := rows.Scan(&id, &title, &content, &createdAt, &updatedAt, &categoryIDs, &categoryNames, &mediaID, &mediaPath, &mediaType, &mediaStatus)
+		if err != nil {
+			return nil, err
+		}
+
+		// **Process Categories Only Once**
+		if len(categories) == 0 && categoryIDs.Valid && categoryNames.Valid {
+			idList := strings.Split(categoryIDs.String, ",")
+			nameList := strings.Split(categoryNames.String, ",")
+			for i := range idList {
+				categories = append(categories, map[string]interface{}{
+					"id":   utils.ConvertStringToInt64(idList[i]),
+					"name": nameList[i],
+				})
 			}
-			if strings.HasPrefix(typeList[i], "image/") {
+		}
+
+		// **Process Media**
+		if mediaPath.Valid && mediaType.Valid {
+			mediaItem := map[string]interface{}{
+				"id":     mediaID,
+				"path":   mediaPath.String,
+				"type":   mediaType.String,
+				"status": mediaStatus,
+			}
+
+			if strings.HasPrefix(mediaType.String, "image/") {
 				images = append(images, mediaItem)
-			} else if strings.HasPrefix(typeList[i], "video/") {
+			} else if strings.HasPrefix(mediaType.String, "video/") {
 				videos = append(videos, mediaItem)
 			}
 		}
+	}
+
+	// **🔹 If No Rows Found, Return Error**
+	if id == 0 {
+		return nil, errors.New("post not found")
 	}
 
 	// **🔹 Construct Final Response**
@@ -365,8 +422,8 @@ func GetDetails(postID string) (map[string]interface{}, error) {
 		"categories": categories,
 		"images":     images,
 		"videos":     videos,
-		"created_at": createdAt,
-		"updated_at": updatedAt,
+		"created_at": createdAt.Format(time.RFC3339),
+		"updated_at": updatedAt.Format(time.RFC3339),
 	}
 
 	return postData, nil

@@ -59,19 +59,24 @@ FROM `posts`
     LEFT JOIN categories ON categories.id = post_categories.category_id
 WHERE LOWER(posts.content) LIKE LOWER('%%') ORDER BY posts.created_at desc LIMIT 10;
 
-SELECT
-posts.id, posts.title, posts.content, posts.created_at, posts.updated_at,
-GROUP_CONCAT(DISTINCT categories.id ORDER BY categories.id ASC SEPARATOR ',') AS category_ids,
-GROUP_CONCAT(DISTINCT categories.name ORDER BY categories.id ASC SEPARATOR ',') AS category_names,
-GROUP_CONCAT(DISTINCT media.id ORDER BY media.id ASC SEPARATOR ',') AS media_ids,
-GROUP_CONCAT(DISTINCT media.path ORDER BY media.id ASC SEPARATOR ',') AS media_paths,
-GROUP_CONCAT(DISTINCT media.type ORDER BY media.id ASC SEPARATOR ',') AS media_types,
-GROUP_CONCAT(DISTINCT media.status ORDER BY media.id ASC SEPARATOR ',') AS media_statuses
-FROM `posts` LEFT JOIN post_categories ON post_categories.post_id = posts.id
-LEFT JOIN categories ON categories.id = post_categories.category_id
-LEFT JOIN media ON media.post_id = posts.id
-WHERE LOWER(posts.content) LIKE LOWER('%%')GROUP BY `posts`.`id` ORDER BY posts.created_at desc
-LIMIT 3;
-
 SELECT posts.*, media.* FROM posts INNER JOIN media ON posts.id = media.post_id
                         WHERE posts.content LIKE '%%' ORDER BY posts.created_at DESC LIMIT 10;
+
+SELECT GROUP_CONCAT(DISTINCT media.id ORDER BY media.id ASC SEPARATOR ',') AS media_ids,
+       GROUP_CONCAT(DISTINCT media.path ORDER BY media.id ASC SEPARATOR ',') AS media_paths,
+       GROUP_CONCAT(DISTINCT media.type ORDER BY media.id ASC SEPARATOR ',') AS media_types,
+       GROUP_CONCAT(DISTINCT media.status ORDER BY media.id ASC SEPARATOR ',') AS media_statuses FROM media LEFT JOIN posts ON media.post_id = posts.id WHERE post_id = 6;
+
+
+
+SELECT
+    posts.id, posts.title, posts.content, posts.created_at, posts.updated_at,
+    GROUP_CONCAT(DISTINCT categories.id ORDER BY categories.id ASC SEPARATOR ',') AS category_ids,
+    GROUP_CONCAT(DISTINCT categories.name ORDER BY categories.id ASC SEPARATOR ',') AS category_names,
+    GROUP_CONCAT(DISTINCT media.id ORDER BY media.id ASC SEPARATOR ',') AS media_ids,
+    GROUP_CONCAT(DISTINCT media.path ORDER BY media.id ASC SEPARATOR ',') AS media_paths,
+    GROUP_CONCAT(DISTINCT media.type ORDER BY media.id ASC SEPARATOR ',') AS media_types,
+    GROUP_CONCAT(DISTINCT media.status ORDER BY media.id ASC SEPARATOR ',') AS media_statuses FROM `posts`
+    LEFT JOIN post_categories ON post_categories.post_id = posts.id
+    LEFT JOIN categories ON categories.id = post_categories.category_id
+    LEFT JOIN media ON media.post_id = posts.id WHERE posts.id = '6' GROUP BY `posts`.`id`
