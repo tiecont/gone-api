@@ -42,19 +42,20 @@ func RegisterRoutes(router *gin.Engine) {
 		postsRoutes.POST("", authMiddleware(), PostControllers.ListAllPost)             // 12
 		postsRoutes.POST("create", authMiddleware(), PostControllers.CreatePost)        // 13
 		postsRoutes.GET("", authMiddleware(), PostControllers.GetDetailsPost)           // 14
+		postsRoutes.PUT("", authMiddleware(), PostControllers.UpdatePost)               // 15
 	}
 
 	// Role Group APIs
 	rolesRoutes := api.Group("/roles")
 	{
-		rolesRoutes.POST("list", authMiddleware(), authzMiddleware(needPermission["ALLOW_LIST_ROLES"]), RoleControllers.ListRoles)     // 15
-		rolesRoutes.POST("create", authMiddleware(), authzMiddleware(needPermission["ALLOW_CREATE_ROLE"]), RoleControllers.CreateRole) // 16
+		rolesRoutes.POST("list", authMiddleware(), authzMiddleware(needPermission["ALLOW_LIST_ROLES"]), RoleControllers.ListRoles)     // 16
+		rolesRoutes.POST("create", authMiddleware(), authzMiddleware(needPermission["ALLOW_CREATE_ROLE"]), RoleControllers.CreateRole) // 17
 	}
 	// Permission Group APIs
 	permissionsRoutes := api.Group("/permissions")
 	{
-		permissionsRoutes.POST("list", authMiddleware(), authzMiddleware(needPermission["ALLOW_LIST_PERMISSIONS"]), PermissionController.ListPermissions)             // 17
-		permissionsRoutes.POST("create", authMiddleware(), authzMiddleware(needPermission["ALLOW_CREATE_PERMISSION"]), PermissionController.CreatePermission)         // 18
-		permissionsRoutes.POST("assign", authMiddleware(), authzMiddleware(needPermission["ALLOW_ASSIGN_PERMISSIONS"]), PermissionController.AssignPermissionsToRole) // 119
+		permissionsRoutes.POST("list", authMiddleware(), authzMiddleware(needPermission["ALLOW_LIST_PERMISSIONS"]), PermissionController.ListPermissions)             // 18
+		permissionsRoutes.POST("create", authMiddleware(), authzMiddleware(needPermission["ALLOW_CREATE_PERMISSION"]), PermissionController.CreatePermission)         // 19
+		permissionsRoutes.POST("assign", authMiddleware(), authzMiddleware(needPermission["ALLOW_ASSIGN_PERMISSIONS"]), PermissionController.AssignPermissionsToRole) // 20
 	}
 }

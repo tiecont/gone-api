@@ -4,6 +4,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"gone-be/src/modules/post/services"
 	model "gone-be/src/modules/user/models"
+	"gone-be/src/utils"
 	"net/http"
 	"strings"
 )
@@ -11,9 +12,8 @@ import (
 // CreatePost handles creating a new post
 func CreatePost(c *gin.Context) {
 	// Step 1: Parse form data
-	title := strings.TrimSpace(c.PostForm("title"))
 	content := strings.TrimSpace(c.PostForm("content"))
-	categoryIds := c.PostFormArray("category_ids") // Get array of category IDs
+	categoryIds := c.PostFormArray("category_ids")
 
 	if len(categoryIds) == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "At least one category must be selected"})
@@ -28,11 +28,6 @@ func CreatePost(c *gin.Context) {
 	}
 	// Handle Receive multiple media
 	files := form.File["media"]
-
-	if len(files) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "At least one image file is required"})
-		return
-	}
 
 	// Step 3: Get user
 	// Retrieve the user from the context (set by Authorization middleware)
@@ -50,7 +45,7 @@ func CreatePost(c *gin.Context) {
 	// Type assertion (since c.Get returns an interface{})
 	currentUser, _ := user.(*model.User)
 	// Step 4: Call the service to create a post
-	result, serviceError := services.CreatePost(title, content, categoryIds, files, currentUser.ID)
+	result, serviceError := services.CreatePost(content, categoryIds, files, currentUser.ID)
 	if serviceError != nil {
 		c.JSON(serviceError.StatusCode, gin.H{"error": serviceError.Message})
 		return
@@ -115,5 +110,61 @@ func GetDetailsPost(c *gin.Context) {
 			"message": "Successfully get details of this post",
 		},
 		"data": response,
+	})
+}
+
+func UpdatePost(c *gin.Context) {
+	// Step 1: Parse form data
+	content := strings.TrimSpace(c.PostForm("content"))
+	postID := utils.ConvertStringToInt64(c.PostForm("id"))
+	categoryIds := c.PostFormArray("category_ids") // Get array of category IDs
+
+	if len(categoryIds) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "At least one category must be selected"})
+		return
+	}
+
+	// Step 2: Handle multiple file uploads
+	form, err := c.MultipartForm()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse form data"})
+		return
+	}
+	// Handle Receive multiple media
+	files := form.File["media"]
+
+	// Step 3: Get user
+	// Retrieve the user from the context (set by Authorization middleware)
+	user, exists := c.Get("user")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"status": gin.H{
+				"code":    http.StatusUnauthorized,
+				"message": "Unauthorized: user not found",
+			},
+		})
+		return
+	}
+
+	// Type assertion (since c.Get returns an interface{})
+	currentUser, _ := user.(*model.User)
+
+	postInfo := services.PostInfo{
+		UserID:      currentUser.ID,
+		PostID:      postID,
+		Content:     content,
+		CategoryIDs: categoryIds,
+		Media:       files,
+	}
+	serviceError := services.EditPostByUserID(postInfo)
+	if serviceError != nil {
+		c.JSON(serviceError.StatusCode, gin.H{"error": serviceError.Message})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"status": gin.H{
+			"code":    http.StatusOK,
+			"message": "Updated post successfully",
+		},
 	})
 }

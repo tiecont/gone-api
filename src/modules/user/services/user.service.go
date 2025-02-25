@@ -19,6 +19,7 @@ import (
 	"net/http"
 )
 
+// GetUserInfo is the function to get user information with the given userID
 func GetUserInfo(userID uint) (map[string]interface{}, error) {
 	db := config.DB
 
@@ -96,7 +97,7 @@ func RegisterUser(user Users.User) (map[string]interface{}, error) {
 			"profile_pic":      defaultProfile.ProfilePic,
 			"cover_photo":      defaultProfile.CoverPhoto,
 			"background_color": defaultProfile.BackgroundColor,
-			"sex":              defaultProfile.Sex,
+			"sex":              defaultProfile.Gender,
 			"birthday":         defaultProfile.Birthday,
 			"location":         defaultProfile.Location,
 			"bio":              defaultProfile.Bio,
@@ -111,6 +112,7 @@ func RegisterUser(user Users.User) (map[string]interface{}, error) {
 	return response, nil
 }
 
+// LoginUser is the function to help user login and return the tokens
 func LoginUser(email, phoneNumber, password, username string) (map[string]interface{}, int, error) {
 	db := config.DB
 
@@ -142,7 +144,7 @@ func LoginUser(email, phoneNumber, password, username string) (map[string]interf
 	return nil, http.StatusOK, nil
 }
 
-// LoginGoogle Google
+// LoginGoogle is the function to login by google service and return the tokens
 func LoginGoogle(googleToken string) (map[string]interface{}, error) {
 	// Step 1: Send the access token to Google's userinfo endpoint
 	userInfoURL := fmt.Sprintf("https://www.googleapis.com/oauth2/v3/userinfo?access_token=%s", googleToken)
@@ -233,6 +235,7 @@ func LoginGoogle(googleToken string) (map[string]interface{}, error) {
 	}, nil
 }
 
+// LoginTwitter is the function to help user login via twitter service and return the tokens
 func LoginTwitter(username, email, image, profileBackgroundImage, profileBackgroundColor, twitterId string) (map[string]interface{}, error) {
 	db := config.DB
 
@@ -394,6 +397,7 @@ func DeleteAllTokensByUserID(userID uint) error {
 	return nil
 }
 
+// RefreshAccessToken is the function to renew the access token by refresh token
 func RefreshAccessToken(token, clientID string) (map[string]interface{}, error) {
 	tx := config.DB.Begin()
 	if tx.Error != nil {
@@ -446,6 +450,7 @@ func RefreshAccessToken(token, clientID string) (map[string]interface{}, error) 
 	return response, nil
 }
 
+// GenerateAccessToken is the function to generate an access token
 func GenerateAccessToken() (string, error) {
 	// Generate random bytes for the token
 	tokenBytes := make([]byte, 32) // 256-bit token
@@ -459,6 +464,7 @@ func GenerateAccessToken() (string, error) {
 	return accessToken, nil
 }
 
+// ForgotPassword is the function will receive an email to process forgot password service
 func ForgotPassword(email string) (int, error) {
 	db := config.DB
 	// Step 1: Check user?
@@ -482,6 +488,7 @@ func ForgotPassword(email string) (int, error) {
 	return http.StatusOK, nil
 }
 
+// ChangePassword is the function to change the password follow by user
 func ChangePassword(oldPassword, newPassword, userID string) (int, error) {
 	// Start a database transaction
 	tx := config.DB.Begin()

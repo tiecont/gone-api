@@ -27,7 +27,7 @@ VALUES (1, 'admin', now(), now()),
        (2, 'user', now(), now());
 
 -- Try to log in or register at frontend, role_id need set to 1
-UPDATE users SET role_id = 3 WHERE id = 2;
+UPDATE users SET role_id = 2 WHERE id = 2;
 INSERT INTO permissions (id, name, created_at, updated_at)
 VALUES (1,  'allow_create_role',now(), now()),
        (2, 'allow_create_permission',now(), now());
@@ -45,6 +45,7 @@ VALUES (3, 1, 3, now(), now()),
 
 
 -- Checking block
+SELECT * FROM users;
 SELECT * FROM role_permissions;
 SELECT * FROM access_tokens WHERE status = 1;
 SELECT * FROM media;
@@ -80,3 +81,4 @@ SELECT
     LEFT JOIN post_categories ON post_categories.post_id = posts.id
     LEFT JOIN categories ON categories.id = post_categories.category_id
     LEFT JOIN media ON media.post_id = posts.id WHERE posts.id = '6' GROUP BY `posts`.`id`
+
