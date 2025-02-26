@@ -1,7 +1,9 @@
 package utils
 
 import (
+	"github.com/gin-gonic/gin"
 	"math"
+	"net/http"
 	"strconv"
 )
 
@@ -105,4 +107,15 @@ func CalculateOffset(currentPage, itemsPerPage int, sortBy, orderBy string) Calc
 		SortBy:       sortBy,
 		Offset:       offset,
 	}
+}
+
+// BindJson is a function to bind the json request
+func BindJson(c *gin.Context, request interface{}) *ServiceError {
+	if err := c.ShouldBind(&request); err != nil {
+		return &ServiceError{
+			StatusCode: http.StatusBadRequest,
+			Message:    "Invalid input",
+		}
+	}
+	return nil
 }

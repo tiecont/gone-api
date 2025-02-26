@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"github.com/gin-gonic/gin"
+	"gone-be/src/functions"
 	"gone-be/src/modules/post/services"
 	model "gone-be/src/modules/user/models"
 	"gone-be/src/utils"
@@ -135,20 +136,11 @@ func UpdatePost(c *gin.Context) {
 
 	// Step 3: Get user
 	// Retrieve the user from the context (set by Authorization middleware)
-	user, exists := c.Get("user")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"status": gin.H{
-				"code":    http.StatusUnauthorized,
-				"message": "Unauthorized: user not found",
-			},
-		})
+	currentUser, getUserErr := functions.GetCurrentUser(c)
+	if getUserErr != nil {
+		c.JSON(getUserErr.StatusCode, gin.H{"error": getUserErr.Error()})
 		return
 	}
-
-	// Type assertion (since c.Get returns an interface{})
-	currentUser, _ := user.(*model.User)
-
 	postInfo := services.PostInfo{
 		UserID:      currentUser.ID,
 		PostID:      postID,

@@ -58,4 +58,10 @@ func RegisterRoutes(router *gin.Engine) {
 		permissionsRoutes.POST("create", authMiddleware(), authzMiddleware(needPermission["ALLOW_CREATE_PERMISSION"]), PermissionController.CreatePermission)         // 19
 		permissionsRoutes.POST("assign", authMiddleware(), authzMiddleware(needPermission["ALLOW_ASSIGN_PERMISSIONS"]), PermissionController.AssignPermissionsToRole) // 20
 	}
+
+	// Likes Group APIs
+	likesRoutes := api.Group("/likes")
+	{
+		likesRoutes.POST("", authMiddleware(), PostControllers.Like) // 21
+	}
 }

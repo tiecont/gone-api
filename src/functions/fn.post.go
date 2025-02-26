@@ -131,7 +131,7 @@ func CheckPostExits(postID uint) *utils.ServiceError {
 }
 
 // SelectPosts is the function will execute the sql queries with given parameters and return rows
-func SelectPosts(searchValue, orderBy, sortBy string, offset, itemsPerPage int) (*sql.Rows, *utils.ServiceError) {
+func SelectPosts(searchValue, orderBy, sortBy string, offset, limit int) (*sql.Rows, *utils.ServiceError) {
 	rows, err := config.DB.Table("posts").
 		Select(`
 			posts.id, posts.content, posts.created_at, posts.updated_at,
@@ -158,7 +158,7 @@ func SelectPosts(searchValue, orderBy, sortBy string, offset, itemsPerPage int) 
 		Group("posts.id, users.id, users.username, profiles.profile_pic, media.id").
 		Order(fmt.Sprintf("posts.%s %s", orderBy, sortBy)).
 		Offset(offset).
-		Limit(itemsPerPage).
+		Limit(limit).
 		Rows()
 	if err != nil {
 		return nil, &utils.ServiceError{
