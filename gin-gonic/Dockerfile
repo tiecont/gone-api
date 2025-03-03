@@ -1,21 +1,18 @@
 # Use the official Golang image
 FROM golang:1.23.4
 
-# Install Air
+# Install Air for live reload
 RUN export PATH=$PATH:$(go env GOPATH)/bin && go install github.com/air-verse/air@latest
-
-# Copy Air config
-COPY .air.toml .
 
 # Set the working directory
 WORKDIR /app
 
+# Copy Air config
+COPY .air.toml ./
+
 # Copy go.mod and create an empty go.sum if missing
 COPY go.mod ./
-RUN touch go.sum
-
-# Download dependencies
-RUN go mod tidy && go mod download
+RUN touch go.sum && go mod tidy && go mod download
 
 # Copy the rest of the code
 COPY . .
@@ -27,5 +24,5 @@ RUN air init || true
 COPY entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
-# Use the entrypoint script to handle migrations and start the app
+# Set the entrypoint script as the default command
 ENTRYPOINT ["/app/entrypoint.sh"]
