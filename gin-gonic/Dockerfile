@@ -10,11 +10,12 @@ COPY .air.toml .
 # Set the working directory
 WORKDIR /app
 
-# Copy go.mod and go.sum first for caching dependencies
-COPY go.mod go.sum ./
+# Copy go.mod and create an empty go.sum if missing
+COPY go.mod ./
+RUN touch go.sum
 
 # Download dependencies
-RUN go mod download
+RUN go mod tidy && go mod download
 
 # Copy the rest of the code
 COPY . .
