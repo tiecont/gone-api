@@ -8,7 +8,7 @@ services:
     container_name: gone-spring
     restart: always
     ports:
-      - "${APP_PORT}:2001"
+      - "${APP_PORT}:8080"
     environment:
       - DB_USER=${DB_USER}
       - DB_PASS=${DB_PASS}
@@ -17,7 +17,7 @@ services:
       - DB_NAME=${DB_NAME}
     volumes:
       - .:/app
-      - /app/tmp
+      - ~/.m2:/root/.m2  # Caches Maven dependencies
     networks:
       - gone_network
 
