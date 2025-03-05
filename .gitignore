@@ -1,3 +1,4 @@
-go.sum
+/sql/.idea
+/gin-gonic/go.mod/go.sum
 /gin-gonic/uploads
 .idea

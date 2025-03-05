@@ -1,1 +1,0 @@
-use class_test;
