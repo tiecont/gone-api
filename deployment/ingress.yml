@@ -1,10 +1,15 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: app-ingress
+  name: nginx-ingress
   annotations:
     nginx.ingress.kubernetes.io/rewrite-target: /
 spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - myapp.local
+      secretName: my-tls-secret  # 👈 Use the TLS secret here
   rules:
     - host: myapp.local
       http:

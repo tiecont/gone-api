@@ -14,7 +14,8 @@ spec:
     spec:
       containers:
         - name: golang-app
-          image: gin-gonic-app:latest
+          image: tiesd01/gin-gonic-app:latest
+          imagePullPolicy: Always
           envFrom:
             - configMapRef:
                 name: app-config

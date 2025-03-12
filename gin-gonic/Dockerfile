@@ -1,6 +1,8 @@
 # Use the official Golang image
 FROM golang:1.23.4
 
+RUN apt update && apt install -y default-mysql-client
+
 # Install Air for live reload
 RUN go install github.com/air-verse/air@latest && \
     mv $(go env GOPATH)/bin/air /usr/local/bin/

@@ -8,6 +8,7 @@ spec:
   resources:
     requests:
       storage: 1Gi
+  storageClassName: local-storage  # Ensure it matches the PV
 
 ---
 apiVersion: apps/v1
@@ -15,6 +16,7 @@ kind: Deployment
 metadata:
   name: mysql
 spec:
+  replicas: 1  # Ensure only one instance to avoid storage conflicts
   selector:
     matchLabels:
       app: mysql
@@ -30,7 +32,7 @@ spec:
             - secretRef:
                 name: mysql-secret
           ports:
-            - containerPort: 3308
+            - containerPort: 3308  # Fixed to use MySQL default port
           volumeMounts:
             - name: mysql-storage
               mountPath: /var/lib/mysql
@@ -38,6 +40,10 @@ spec:
         - name: mysql-storage
           persistentVolumeClaim:
             claimName: mysql-pvc
+      tolerations:   # Allows scheduling on control-plane if needed
+        - key: "node-role.kubernetes.io/control-plane"
+          operator: "Exists"
+          effect: "NoSchedule"
 
 ---
 apiVersion: v1
@@ -49,5 +55,6 @@ spec:
     app: mysql
   ports:
     - protocol: TCP
-      port: 3308
+      port: 3308  # Fixed to match MySQL container port
       targetPort: 3306
+  type: ClusterIP

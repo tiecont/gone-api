@@ -5,6 +5,6 @@ metadata:
 data:
   DB_USER: "admin"
   DB_PASS: "MysqlAdmin"
-  DB_HOST: "db"
+  DB_HOST: "mysql"
   DB_PORT: "3308"
   DB_NAME: "GoneDB"
