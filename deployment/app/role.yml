@@ -1,0 +1,25 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: gone-app
+  name: application-role
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "services", "configmaps", "secrets"]
+    verbs: ["get", "list", "watch", "create", "update", "delete"]
+
+---
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  namespace: gone-app
+  name: application-role-binding
+subjects:
+  - kind: ServiceAccount
+    name: default
+    namespace: gone-app
+roleRef:
+  kind: Role
+  name: application-role
+  apiGroup: rbac.authorization.k8s.io

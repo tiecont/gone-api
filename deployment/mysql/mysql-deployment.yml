@@ -1,7 +1,13 @@
 apiVersion: v1
+kind: Namespace
+metadata:
+  name: gone-database
+---
+apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: mysql-pvc
+  namespace: gone-database
 spec:
   accessModes:
     - ReadWriteOnce
@@ -9,12 +15,12 @@ spec:
     requests:
       storage: 1Gi
   storageClassName: local-storage  # Ensure it matches the PV
-
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: mysql
+  namespace: gone-database
 spec:
   replicas: 1  # Ensure only one instance to avoid storage conflicts
   selector:
@@ -32,7 +38,7 @@ spec:
             - secretRef:
                 name: mysql-secret
           ports:
-            - containerPort: 3308  # Fixed to use MySQL default port
+            - containerPort: 3308
           volumeMounts:
             - name: mysql-storage
               mountPath: /var/lib/mysql
@@ -44,17 +50,17 @@ spec:
         - key: "node-role.kubernetes.io/control-plane"
           operator: "Exists"
           effect: "NoSchedule"
-
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: mysql
+  namespace: gone-database
 spec:
   selector:
     app: mysql
   ports:
     - protocol: TCP
-      port: 3308  # Fixed to match MySQL container port
+      port: 3308
       targetPort: 3306
   type: ClusterIP
