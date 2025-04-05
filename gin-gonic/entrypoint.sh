@@ -3,12 +3,6 @@
 # Exit immediately if a command exits with a non-zero status
 set -e
 
-# Ensure Air is installed
- if ! command -v air &> /dev/null; then
-   echo "Error: Air is not installed"
-   exit 1
- fi
-
 # Ensure the main binary is built before running
 if [ ! -f "./main" ]; then
   echo "Binary './main' not found. Building it now..."

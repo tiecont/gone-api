@@ -1,4 +1,5 @@
 /sql/.idea
 /gin-gonic/go.mod/go.sum
 /gin-gonic/uploads
+/gin-gonic/entrypoint.sh
 .idea

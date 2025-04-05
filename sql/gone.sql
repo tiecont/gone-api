@@ -27,7 +27,7 @@ VALUES (1, 'admin', now(), now()),
        (2, 'user', now(), now());
 
 -- Try to log in or register at frontend, role_id need set to 1
-UPDATE users SET role_id = 2 WHERE id = 4;
+UPDATE users SET role_id = 2 WHERE id = 1;
 INSERT INTO permissions (id, name, created_at, updated_at)
 VALUES (1,  'allow_create_role',now(), now()),
        (2, 'allow_create_permission',now(), now());

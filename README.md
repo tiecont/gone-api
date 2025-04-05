@@ -1,211 +1,191 @@
-# Kubernetes Installation Guide with Calico CNI
 
-## 1️⃣ Prerequisites
-- 2+ Ubuntu 22.04 servers (1 Master, 1+ Worker nodes)
-- Minimum 2 vCPUs and 2GB RAM per node
-- Root or sudo access
-- Internet connectivity
+# Kubernetes Cluster Setup Guide
 
-## 2️⃣ Disable Swap
-```bash
-sudo swapoff -a
-sudo sed -i '/ swap / s/^/#/' /etc/fstab
-```
+This guide provides a step-by-step process for setting up a Kubernetes cluster on Ubuntu servers, including configuration of Docker, containerd, and Calico for networking. The setup supports both single-master and multi-master (HA) configurations.
 
-## 3️⃣ Install Dependencies
-```bash
-sudo apt update
-sudo apt install -y apt-transport-https curl
-```
+## Table of Contents
+1. [System Update and User Creation](#system-update-and-user-creation)
+2. [Swap Configuration](#swap-configuration)
+3. [Kernel Modules Configuration](#kernel-modules-configuration)
+4. [Network Configuration](#network-configuration)
+5. [Docker and Kubernetes Installation](#docker-and-kubernetes-installation)
+6. [Kubernetes Cluster Initialization](#kubernetes-cluster-initialization)
+7. [Resetting Kubernetes Cluster](#resetting-kubernetes-cluster)
+8. [Multi-Master Configuration](#multi-master-configuration)
+9. [Conclusion](#conclusion)
 
-## 4️⃣ Install Docker
-```bash
-sudo apt install -y docker.io
-sudo systemctl enable --now docker
-```
+---
 
-## 5️⃣ Install Kubernetes Components
-```bash
-curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.32/deb/Release.key | sudo tee /usr/share/keyrings/kubernetes-archive-keyring.asc
+## System Update and User Creation
 
-echo "deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.asc] https://pkgs.k8s.io/core:/stable:/v1.32/deb/ /" | sudo tee /etc/apt/sources.list.d/kubernetes.list
+1. **Update and upgrade the system**:
+   ```bash
+   sudo apt update -y && sudo apt upgrade -y
+   ```
 
-sudo apt update
-sudo apt install -y kubelet kubeadm kubectl
-sudo systemctl enable --now kubelet
-```
+2. **Create `devops` user and switch to it**:
+   ```bash
+   adduser devops
+   su devops
+   cd /home/devops
+   ```
 
-## 6️⃣ Initialize Kubernetes Master Node
-```bash
-sudo kubeadm init --pod-network-cidr=192.168.0.0/16
-```
+---
 
-## 7️⃣ Configure kubectl (On Master Node)
-```bash
-mkdir -p $HOME/.kube
-sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
-sudo chown $(id -u):$(id -g) $HOME/.kube/config
-export KUBECONFIG=/etc/kubernetes/admin.conf
-```
+## Swap Configuration
 
-## 8️⃣ Install Calico Network Plugin
-```bash
-kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.26.1/manifests/calico.yaml
-```
+1. **Turn off swap**:
+   ```bash
+   sudo swapoff -a
+   ```
 
-## 9️⃣ Join Worker Nodes (Run on each worker node)
-Get the join command from master node:
-```bash
-kubeadm token create --print-join-command
-```
-Run the output command on worker nodes:
-```bash
-sudo kubeadm join <master-ip>:6443 --token <token> --discovery-token-ca-cert-hash sha256:<hash>
-```
+2. **Prevent swap from re-enabling after reboot**:
+   ```bash
+   sudo sed -i '/swap.img/s/^/#/' /etc/fstab
+   ```
 
-## 🔟 Verify Cluster Setup
-```bash
-kubectl get nodes
-kubectl get pods -n kube-system
-```
+---
 
-🚀 **Kubernetes cluster is now ready with Calico!**
-# Kubernetes Setup Guide (Fixing kubelet issues to Deployment Success)
+## Kernel Modules Configuration
 
-This guide provides step-by-step instructions to set up a Kubernetes cluster, fix `kubelet` issues, install networking (Flannel), and deploy applications successfully.
+1. **Configure the kernel modules**:
+   Edit the file `/etc/modules-load.d/containerd.conf` and add the following:
+   ```text
+   overlay
+   br_netfilter
+   ```
 
-## 🛠 1. Fixing kubelet Issues
+2. **Load the kernel modules**:
+   ```bash
+   sudo modprobe overlay
+   sudo modprobe br_netfilter
+   ```
 
-If `kubelet` is failing to start, try the following:
+---
 
-### 🔹 Check kubelet status
-```bash
-systemctl status kubelet
-```
-If it shows errors, proceed with the following fixes:
+## Network Configuration
 
-### 🔹 Restart kubelet
-```bash
-systemctl restart kubelet
-systemctl enable kubelet
-```
+1. **Set up sysctl parameters for Kubernetes networking**:
+   ```bash
+   echo "net.bridge.bridge-nf-call-ip6tables = 1" | sudo tee -a /etc/sysctl.d/kubernetes.conf
+   echo "net.bridge.bridge-nf-call-iptables = 1" | sudo tee -a /etc/sysctl.d/kubernetes.conf
+   echo "net.ipv4.ip_forward = 1" | sudo tee -a /etc/sysctl.d/kubernetes.conf
+   ```
 
-### 🔹 Reset Kubernetes (if necessary)
-```bash
-kubeadm reset -f
-systemctl restart kubelet
-```
+2. **Apply sysctl settings**:
+   ```bash
+   sudo sysctl --system
+   ```
 
-## 🚀 2. Reinitialize Kubernetes Cluster
-```bash
-kubeadm init --pod-network-cidr=10.244.0.0/16
-```
+---
 
-### 🔹 Set up kubeconfig for `kubectl`
-```bash
-mkdir -p $HOME/.kube
-cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
-chown $(id -u):$(id -g) $HOME/.kube/config
-```
+## Docker and Kubernetes Installation
 
-## 🌐 3. Install Flannel Networking
-```bash
-kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml
-```
+1. **Install necessary packages and add Docker repository**:
+   ```bash
+   sudo apt install -y curl gnupg2 software-properties-common apt-transport-https ca-certificates
+   sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmour -o /etc/apt/trusted.gpg.d/docker.gpg
+   sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+   ```
 
-### 🔹 Verify Flannel is running
-```bash
-kubectl get pods -n kube-flannel
-```
-If any pod is in `Error` state, check logs:
-```bash
-kubectl logs -n kube-flannel <pod-name>
-```
+2. **Install containerd**:
+   ```bash
+   sudo apt update -y
+   sudo apt install -y containerd.io
+   ```
 
-## 🏗 4. Remove Taint to Allow Workloads on Control Plane (Optional for Single-Node Setup)
-```bash
-kubectl taint nodes --all node-role.kubernetes.io/control-plane-
-```
+3. **Configure containerd**:
+   ```bash
+   containerd config default | sudo tee /etc/containerd/config.toml >/dev/null 2>&1
+   sudo sed -i 's/SystemdCgroup = false/SystemdCgroup = true/g' /etc/containerd/config.toml
+   ```
 
-## 🏗 5. Deploy Applications
+4. **Restart and enable containerd**:
+   ```bash
+   sudo systemctl restart containerd
+   sudo systemctl enable containerd
+   ```
 
-### 🔹 Deploy MySQL
-```yaml
-kubectl apply -f - <<EOF
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: mysql
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: mysql
-  template:
-    metadata:
-      labels:
-        app: mysql
-    spec:
-      containers:
-      - name: mysql
-        image: mysql:5.7
-        env:
-        - name: MYSQL_ROOT_PASSWORD
-          value: rootpassword
-EOF
-```
+5. **Add Kubernetes repository**:
+   ```bash
+   echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.30/deb/ /" | sudo tee /etc/apt/sources.list.d/kubernetes.list
+   curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.30/deb/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+   ```
 
-### 🔹 Deploy Spring Boot Application
-```yaml
-kubectl apply -f - <<EOF
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: spring-app
-spec:
-  replicas: 2
-  selector:
-    matchLabels:
-      app: spring-app
-  template:
-    metadata:
-      labels:
-        app: spring-app
-    spec:
-      containers:
-      - name: spring-app
-        image: spring-app:latest
-        ports:
-        - containerPort: 8080
-EOF
-```
+6. **Install Kubernetes packages**:
+   ```bash
+   sudo apt update -y
+   sudo apt install -y kubelet kubeadm kubectl
+   sudo apt-mark hold kubelet kubeadm kubectl
+   ```
 
-## 🔍 6. Check Deployment Status
-```bash
-kubectl get pods -A
-```
+---
 
-## 🌎 7. Expose Services
-```bash
-kubectl expose deployment mysql --type=ClusterIP --port=3308
-kubectl expose deployment spring-app --type=NodePort --name=spring-service
-```
+## Kubernetes Cluster Initialization
 
-### 🔹 Get service details
-```bash
-kubectl get svc
-```
+### Reset Cluster (if needed)
 
-## 🎉 8. Access Application
+1. **Reset Kubernetes cluster**:
+   ```bash
+   sudo kubeadm reset -f
+   sudo rm -rf /var/lib/etcd
+   sudo rm -rf /etc/kubernetes/manifests/*
+   ```
 
-Find the NodePort assigned to `spring-service`:
-```bash
-kubectl get svc spring-service
-```
-Access it using:
-```bash
-http://<NODE_IP>:<NODE_PORT>
-```
+### Single-Master Setup (1 master, 2 workers)
 
-🚀 Your Kubernetes cluster is now fully set up with a working application! 🎉
+1. **On master node (k8s-master-1)**, initialize Kubernetes:
+   ```bash
+   sudo kubeadm init
+   ```
 
+2. **Configure kubectl for the master node**:
+   ```bash
+   mkdir -p $HOME/.kube
+   sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+   sudo chown $(id -u):$(id -g) $HOME/.kube/config
+   ```
+
+3. **Install Calico networking**:
+   ```bash
+   kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.25.0/manifests/calico.yaml
+   ```
+
+4. **On worker nodes (k8s-master-2, k8s-master-3)**, join the cluster:
+   ```bash
+   sudo kubeadm join 192.168.1.111:6443 --token your_token --discovery-token-ca-cert-hash your_sha
+   ```
+
+---
+
+## Multi-Master Setup (3 masters)
+
+1. **On master node (k8s-master-1)**, initialize Kubernetes with control-plane endpoint:
+   ```bash
+   sudo kubeadm init --control-plane-endpoint "192.168.1.111:6443" --upload-certs
+   ```
+
+2. **Configure kubectl for the master node**:
+   ```bash
+   mkdir -p $HOME/.kube
+   sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+   sudo chown $(id -u):$(id -g) $HOME/.kube/config
+   ```
+
+3. **Install Calico networking**:
+   ```bash
+   kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.25.0/manifests/calico.yaml
+   ```
+
+4. **On other master nodes (k8s-master-2, k8s-master-3)**, join the cluster:
+   ```bash
+   sudo kubeadm join 192.168.1.111:6443 --token your_token --discovery-token-ca-cert-hash your_sha --control-plane --certificate-key your_cert
+   ```
+
+---
+
+## Conclusion
+
+With the steps above, you should now have a working Kubernetes cluster configured on Ubuntu servers. Depending on your architecture, you can opt for a single master or multi-master setup for high availability. Ensure you verify the status of your nodes and pods using `kubectl get nodes` and `kubectl get pods -A`.
+
+Happy Kubernetes managing! 🚀
