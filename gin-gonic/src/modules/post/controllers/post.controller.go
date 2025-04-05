@@ -80,7 +80,12 @@ func ListAllPost(c *gin.Context) {
 		})
 		return
 	}
-	response, err := services.List(request.CurrentPage, request.ItemsPerPage, request.OrderBy, request.SortBy, request.SearchValue)
+	currentUser, getUserErr := functions.GetCurrentUser(c)
+	if getUserErr != nil {
+		c.JSON(getUserErr.StatusCode, gin.H{"error": getUserErr.Message})
+		return
+	}
+	response, err := services.List(request.CurrentPage, request.ItemsPerPage, request.OrderBy, request.SortBy, request.SearchValue, currentUser.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

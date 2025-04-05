@@ -3,6 +3,7 @@ package services
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"github.com/gin-gonic/gin"
 	"gone-be/src/config"
 	"gone-be/src/functions"
@@ -14,10 +15,11 @@ import (
 	"time"
 )
 
-func List(currentPage, itemsPerPage int, orderBy, sortBy, searchValue string) (map[string]interface{}, error) {
+func List(currentPage, itemsPerPage int, orderBy, sortBy, searchValue string, userID uint) (map[string]interface{}, error) {
 	// Validate sorting and calculate offset for pagination
 	offsetData := utils.CalculateOffset(currentPage, itemsPerPage, sortBy, orderBy)
-	// Fetch posts using the renewed SelectPosts function
+
+	// Fetch posts using the SelectPosts function
 	rows, err := functions.SelectPosts(
 		searchValue,
 		offsetData.OrderBy,
@@ -30,14 +32,13 @@ func List(currentPage, itemsPerPage int, orderBy, sortBy, searchValue string) (m
 	}
 	defer rows.Close()
 
-	// Consolidate posts using a map keyed by post ID
 	postMap := make(map[uint]map[string]interface{})
 	var paginationResult map[string]interface{}
 
 	for rows.Next() {
-		// Define variables to scan row data
+		// Declare variables for scanning
 		var (
-			postID, userID                                     uint
+			postID, ownerID                                    uint
 			content                                            sql.NullString
 			createdAt, updatedAt                               time.Time
 			categoryIDs, categoryNames                         sql.NullString
@@ -48,10 +49,10 @@ func List(currentPage, itemsPerPage int, orderBy, sortBy, searchValue string) (m
 			commentsCount, likesCount, sharesCount, totalCount int
 		)
 
-		// Scan row values into the variables
+		// Scan values from query result
 		if err := rows.Scan(
 			&postID, &content, &createdAt, &updatedAt,
-			&userID, &username, &profilePic,
+			&ownerID, &username, &profilePic,
 			&categoryIDs, &categoryNames,
 			&mediaID, &mediaPath, &mediaType, &mediaStatus,
 			&commentsCount, &likesCount, &sharesCount, &totalCount,
@@ -59,10 +60,9 @@ func List(currentPage, itemsPerPage int, orderBy, sortBy, searchValue string) (m
 			return nil, err
 		}
 
-		// Check if the post is already in our map
+		// If post doesn't exist in map, initialize it
 		post, exists := postMap[postID]
 		if !exists {
-			// Parse category info into a slice if available
 			var categories []map[string]interface{}
 			if categoryIDs.Valid && categoryNames.Valid {
 				idList := strings.Split(categoryIDs.String, ",")
@@ -76,8 +76,11 @@ func List(currentPage, itemsPerPage int, orderBy, sortBy, searchValue string) (m
 					}
 				}
 			}
-
-			// Initialize the post data
+			// Check user has liked posts
+			var isLiked, checkErr = functions.CheckIsLiked(userID, postID)
+			if checkErr != nil {
+				fmt.Println(checkErr.Message)
+			}
 			post = map[string]interface{}{
 				"id":             postID,
 				"content":        content.String,
@@ -86,15 +89,16 @@ func List(currentPage, itemsPerPage int, orderBy, sortBy, searchValue string) (m
 				"categories":     categories,
 				"images":         []map[string]interface{}{},
 				"videos":         []map[string]interface{}{},
-				"user":           gin.H{"id": userID, "name": username.String, "profile_pic": profilePic.String},
+				"user":           gin.H{"id": ownerID, "name": username.String, "profile_pic": profilePic.String},
 				"comments_count": commentsCount,
 				"likes_count":    likesCount,
+				"is_liked":       isLiked,
 				"shares_count":   sharesCount,
 			}
 			postMap[postID] = post
 		}
 
-		// Append media information to the appropriate slice
+		// Append media to image or video list
 		if mediaID.Valid && mediaPath.Valid && mediaType.Valid && mediaStatus.Valid {
 			mediaItem := map[string]interface{}{
 				"id":     mediaID.Int64,
@@ -109,15 +113,17 @@ func List(currentPage, itemsPerPage int, orderBy, sortBy, searchValue string) (m
 			}
 		}
 
-		// Use totalCount from any row (assumed same for all) to generate pagination metadata
-		paginated, err := utils.Paginate(int64(totalCount), currentPage, itemsPerPage)
-		if err != nil {
-			return nil, err
+		// Build pagination metadata once
+		if paginationResult == nil {
+			paginated, err := utils.Paginate(int64(totalCount), currentPage, itemsPerPage)
+			if err != nil {
+				return nil, err
+			}
+			paginationResult = paginated
 		}
-		paginationResult = paginated
 	}
 
-	// Convert the consolidated posts map to a slice for response
+	// Convert postMap to slice
 	items := make([]map[string]interface{}, 0, len(postMap))
 	for _, post := range postMap {
 		items = append(items, post)
