@@ -4,11 +4,12 @@ import (
 	"fmt"
 	AccessTokens "gone-be/src/modules/key_token/access_token/models"
 	RefreshTokens "gone-be/src/modules/key_token/refresh_token/models"
+	Notifications "gone-be/src/modules/notification/models"
 	Permissions "gone-be/src/modules/permission/models"
-	"gone-be/src/modules/post/models"
+	Posts "gone-be/src/modules/post/models"
 	Profiles "gone-be/src/modules/profile/models"
 	Roles "gone-be/src/modules/role/models"
-	models2 "gone-be/src/modules/user/models"
+	Users "gone-be/src/modules/user/models"
 	"log"
 	"os"
 
@@ -56,9 +57,9 @@ func runMigrations(db *gorm.DB) error {
 	migrations := []func(*gorm.DB) error{
 		// Role and User models
 		Roles.MigrateRole,
-		models2.MigrateUser,
-		models2.MigrateFriends,
-		models2.MigrateMessage,
+		Users.MigrateUser,
+		Users.MigrateFriends,
+		Users.MigrateMessage,
 
 		// Profile model
 		Profiles.MigrateProfile,
@@ -72,17 +73,18 @@ func runMigrations(db *gorm.DB) error {
 		RefreshTokens.MigrateRefreshTokens,
 
 		// Post-related models
-		models.MigratePost,
-		models.MigrateComment,
-		models.MigrateCommentLike,
-		models.MigrateCategory,
-		models.MigratePostCategory,
-		models.MigratePostLike,
-		models.MigrateMedia,
-		models.MigratePostShare,
+		Posts.MigratePost,
+		Posts.MigrateComment,
+		Posts.MigrateCommentLike,
+		Posts.MigrateCategory,
+		Posts.MigratePostCategory,
+		Posts.MigratePostLike,
+		Posts.MigrateMedia,
+		Posts.MigratePostShare,
 
 		// Add Tables for future
-		models2.MigrateVerificationCode,
+		Users.MigrateVerificationCode,
+		Notifications.MigrateNotification,
 	}
 
 	// Iterate through all migrations

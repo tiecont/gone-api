@@ -62,7 +62,7 @@ func RegisterRoutes(router *gin.Engine) {
 	// Likes Group APIs
 	likesRoutes := api.Group("/likes")
 	{
-		likesRoutes.POST("", authMiddleware(), PostControllers.Like) // 21
-		likesRoutes.POST("/undo", authMiddleware(), PostControllers.DisLike)
+		likesRoutes.POST("", authMiddleware(), PostControllers.Like)         // 21
+		likesRoutes.POST("/undo", authMiddleware(), PostControllers.DisLike) // 22
 	}
 }

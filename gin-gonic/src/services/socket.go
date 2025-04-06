@@ -2,6 +2,9 @@ package services
 
 import (
 	"encoding/json"
+	"fmt"
+	"gone-be/src/utils"
+	"gone-be/store"
 	"log"
 	"net/http"
 
@@ -27,18 +30,26 @@ type WebSocketMessage struct {
 
 // WebSocketHandler handles WebSocket connections and events
 func WebSocketHandler(c *gin.Context) {
+	// Get UserID to store
+	userID := c.Query("userId")
+	if userID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "userId is required"})
+		return
+	}
+
 	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
 		log.Printf("Failed to upgrade WebSocket connection: %v", err)
 		return
 	}
 	defer func() {
-		if err := conn.Close(); err != nil {
-			log.Printf("Failed to close WebSocket connection: %v", err)
-		}
+		conn.Close()
+		store.RemoveUserSocket(utils.ConvertStringToUint(userID))
+		log.Printf("Client disconnected: %s", conn.RemoteAddr())
 	}()
 
 	log.Printf("Client connected: %s", conn.RemoteAddr())
+	store.SetUserSocket(utils.ConvertStringToUint(userID), conn)
 
 	for {
 		// Read message from the client
@@ -102,4 +113,19 @@ func sendJSONMessage(conn *websocket.Conn, messageType int, response WebSocketMe
 		return err
 	}
 	return conn.WriteMessage(messageType, responseJSON)
+}
+
+// SendMessageToUser is a function using socket to send message
+func SendMessageToUser(userID uint, message WebSocketMessage) error {
+	conn, exists := store.GetUserSocket(userID)
+	if !exists {
+		return fmt.Errorf("user %s not connected", userID)
+	}
+
+	data, err := json.Marshal(message)
+	if err != nil {
+		return err
+	}
+
+	return conn.WriteMessage(websocket.TextMessage, data)
 }

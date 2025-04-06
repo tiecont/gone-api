@@ -46,12 +46,15 @@ VALUES (3, 1, 3, now(), now()),
 
 -- Checking block
 SELECT * FROM users;
+SELECT * FROM profiles;
 SELECT * FROM role_permissions;
 SELECT * FROM access_tokens WHERE status = 1;
 SELECT * FROM permissions;
 SELECT * FROM media;
 SELECT * FROM posts WHERE id = 2;
 
+SELECT * FROM `users` WHERE status = true AND (email = 'phamson1968nt@gmail.com' OR phone_number = '' OR username = '') LIMIT 1;
+SELECT * FROM `users` WHERE status = true AND email ='phamson1968nt@gmail.com';
 SELECT posts.id, posts.content, posts.created_at, posts.updated_at,
 media.id AS media_id, media.path AS media_path, media.type AS media_type, media.status AS media_status,
        categories.id AS categories_id, categories.name AS categories_name

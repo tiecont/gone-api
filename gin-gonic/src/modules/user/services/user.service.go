@@ -116,31 +116,44 @@ func RegisterUser(user Users.User) (map[string]interface{}, error) {
 func LoginUser(email, phoneNumber, password, username string) (map[string]interface{}, int, error) {
 	db := config.DB
 
-	// Step 1: Check if the user exists
+	// Step 1: Xác định thông tin đầu vào để truy vấn
 	var existingUser Users.User
-	if err := db.Where("status = true AND (email = ? OR phone_number = ? OR username = ?)", email, phoneNumber, username).First(&existingUser).Error; err != nil {
+	var err error
+
+	switch {
+	case email != "":
+		err = db.Where("status = true AND email = ?", email).First(&existingUser).Error
+	case phoneNumber != "":
+		err = db.Where("status = true AND phone_number = ?", phoneNumber).First(&existingUser).Error
+	case username != "":
+		err = db.Where("status = true AND username = ?", username).First(&existingUser).Error
+	default:
+		return nil, http.StatusBadRequest, errors.New("email, phone number, or username is required")
+	}
+
+	if err != nil {
 		return nil, http.StatusUnauthorized, errors.New("invalid user")
 	}
 
-	// Step 2: Validate the password
+	// Step 2: Kiểm tra mật khẩu
 	if err := bcrypt.CompareHashAndPassword([]byte(existingUser.Password), []byte(password)); err != nil {
 		return nil, http.StatusUnauthorized, errors.New("invalid credentials")
 	}
 
-	// Step 3: Generate a 6-digit verification code
+	// Step 3: Tạo mã xác minh 6 chữ số
 	verificationCode := generateVerificationCode()
 
-	// Step 4: Save the verification code to the database
+	// Step 4: Lưu mã xác minh
 	if err := saveVerificationCode(existingUser.Email, verificationCode); err != nil {
 		return nil, http.StatusInternalServerError, errors.New("failed to save verification code")
 	}
 
-	// Step 5: Send the verification code via email
+	// Step 5: Gửi mã xác minh qua email
 	if err := sendVerificationEmail(existingUser.Email, verificationCode); err != nil {
 		return nil, http.StatusInternalServerError, errors.New("failed to send verification email")
 	}
 
-	// Step 6: Return nil on success
+	// Step 6: Trả về thành công
 	return nil, http.StatusOK, nil
 }
 
