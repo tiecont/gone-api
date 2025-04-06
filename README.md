@@ -189,3 +189,119 @@ This guide provides a step-by-step process for setting up a Kubernetes cluster o
 With the steps above, you should now have a working Kubernetes cluster configured on Ubuntu servers. Depending on your architecture, you can opt for a single master or multi-master setup for high availability. Ensure you verify the status of your nodes and pods using `kubectl get nodes` and `kubectl get pods -A`.
 
 Happy Kubernetes managing! 🚀
+
+# 🐳 Docker & Rancher Setup Guide (Ubuntu)
+
+This guide walks you through installing Docker & Docker Compose, mounting a new disk, and running Rancher server using Docker.
+
+---
+
+## ✅ Step 1: Install Docker Engine
+
+Update packages and install dependencies:
+
+```bash
+sudo apt update
+sudo apt install -y ca-certificates curl gnupg lsb-release
+```
+
+Add Docker’s official GPG key:
+
+```bash
+sudo mkdir -p /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | \
+  sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+```
+
+Add Docker repository:
+
+```bash
+echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
+  https://download.docker.com/linux/ubuntu \
+  $(lsb_release -cs) stable" | \
+  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+```
+
+Install Docker:
+
+```bash
+sudo apt update
+sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+```
+
+---
+
+## ✅ Step 2: Install `docker-compose` CLI (Standalone)
+
+```bash
+sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" \
+  -o /usr/local/bin/docker-compose
+sudo chmod +x /usr/local/bin/docker-compose
+```
+
+Verify installation:
+
+```bash
+docker --version
+docker-compose --version
+```
+
+---
+
+## ✅ Step 3: Run Docker Without `sudo` (Optional)
+
+```bash
+sudo usermod -aG docker $USER
+newgrp docker
+```
+
+Then test:
+
+```bash
+docker ps
+```
+
+---
+
+## ✅ Step 4: Mount and Prepare Disk for Rancher
+
+Format and mount disk (replace `/dev/sdb` with your device):
+
+```bash
+sudo mkfs.ext4 -m 0 /dev/sdb
+sudo mkdir /data
+echo "/dev/sdb  /data  ext4  defaults  0  0" | sudo tee -a /etc/fstab
+sudo mount -a
+sudo df -h
+```
+
+---
+
+## ✅ Step 5: Run Rancher Server via Docker
+
+Pull and run Rancher with data volume:
+
+```bash
+docker run --name rancher-server -d --restart=unless-stopped \
+  -p 80:80 -p 443:443 \
+  -v /data/rancher:/var/lib/rancher \
+  --privileged rancher/rancher:latest
+```
+
+---
+
+## 🔐 Get Rancher Bootstrap Password
+
+```bash
+docker logs rancher-server 2>&1 | grep "Bootstrap Password:"
+```
+
+Use this password to log into Rancher for the first time via the web UI.
+
+---
+
+## 🎉 Done!
+
+You now have Docker, Docker Compose, disk storage, and Rancher running!
+
