@@ -168,3 +168,23 @@ func SelectPosts(searchValue, orderBy, sortBy string, offset, limit int) (*sql.R
 	}
 	return rows, nil
 }
+
+// ListNotifications is a function return a row query for list of notis
+func ListNotifications(searchValue, orderBy, sortBy string, offset, limit int, isSeen bool, receiverID uint) (*sql.Rows, *utils.ServiceError) {
+	rows, err := config.DB.Table("notifications").
+		Select(`*,
+			COUNT(notifications.id) OVER() AS total_count
+		`).
+		Where("LOWER(notifications.message) LIKE LOWER(?) AND is_seen = ? AND receiverID = ?", "%"+searchValue+"%", isSeen, receiverID).
+		Order(fmt.Sprintf("notifications.%s %s", orderBy, sortBy)).
+		Offset(offset).
+		Limit(limit).
+		Rows()
+	if err != nil {
+		return nil, &utils.ServiceError{
+			StatusCode: http.StatusInternalServerError,
+			Message:    err.Error(),
+		}
+	}
+	return rows, nil
+}

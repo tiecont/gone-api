@@ -1,11 +1,14 @@
 package services
 
 import (
+	"database/sql"
 	"gone-be/src/config"
+	"gone-be/src/functions"
 	"gone-be/src/modules/notification/models"
 	"gone-be/src/services"
 	"gone-be/src/utils"
 	"net/http"
+	"time"
 )
 
 func NotificationHandler(senderID, receiverID uint, message string) *utils.ServiceError {
@@ -35,5 +38,106 @@ func NotificationHandler(senderID, receiverID uint, message string) *utils.Servi
 	if err != nil {
 		return nil
 	}
+	return nil
+}
+
+func GetNotificationsByUserID(userID uint, currentPage, itemsPerPage int, orderBy, sortBy, searchValue string, isSeen bool) (map[string]interface{}, *utils.ServiceError) {
+	// Prepare Pagination
+	offsetData := utils.CalculateOffset(currentPage, itemsPerPage, sortBy, orderBy)
+
+	// Get Rows
+	rows, err := functions.ListNotifications(searchValue, offsetData.OrderBy, offsetData.SortBy, offsetData.Offset, itemsPerPage, isSeen, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	notificationMap := make(map[uint]map[string]interface{})
+	var paginationResult map[string]interface{}
+
+	for rows.Next() {
+		// Declare variables for scanning
+		var (
+			notificationID, senderID, receiverID uint
+			message                              sql.NullString
+			createdAt, updatedAt                 time.Time
+			isSeen                               sql.NullBool
+			totalCount                           int
+		)
+		if err := rows.Scan(
+			&notificationID, &senderID, &receiverID,
+			&message, &createdAt, &updatedAt, &isSeen,
+			&totalCount); err != nil {
+			return nil, &utils.ServiceError{
+				StatusCode: http.StatusInternalServerError,
+				Message:    err.Error(),
+			}
+		}
+
+		// If post doesn't exist in map, initialize it
+		notifications, exists := notificationMap[notificationID]
+		if !exists {
+			notifications = map[string]interface{}{
+				"id":         notificationID,
+				"senderID":   senderID,
+				"receiverID": receiverID,
+				"message":    message.String,
+				"createdAt":  createdAt.String(),
+				"updatedAt":  updatedAt.String(),
+			}
+			notificationMap[notificationID] = notifications
+		}
+
+		// Build pagination metadata once
+		if paginationResult == nil {
+			paginated, err := utils.Paginate(int64(totalCount), currentPage, itemsPerPage)
+			if err != nil {
+				return nil, &utils.ServiceError{
+					StatusCode: http.StatusInternalServerError,
+					Message:    err.Error(),
+				}
+			}
+			paginationResult = paginated
+		}
+	}
+	// Convert postMap to slice
+	items := make([]map[string]interface{}, 0, len(notificationMap))
+	for _, post := range notificationMap {
+		items = append(items, post)
+	}
+
+	return map[string]interface{}{
+		"items":      items,
+		"pagination": paginationResult,
+	}, nil
+}
+
+func UpdateIsSeen(notificationID, userID uint) *utils.ServiceError {
+	db := config.DB
+
+	if err := db.Model(&models.Notification{}).
+		Where("id = ? AND receiverID = ?", notificationID, userID).
+		Update("is_seen", true).Error; err != nil {
+		return &utils.ServiceError{
+			StatusCode: http.StatusInternalServerError,
+			Message:    "Failed to update is_seen status",
+		}
+	}
+
+	return nil
+}
+
+func UpdateIsSeenForAllNotificationByUserID(userID uint) *utils.ServiceError {
+	db := config.DB
+
+	if err := db.Model(&models.Notification{}).
+		Where("receiverID = ? AND is_seen = false", userID).
+		Update("is_seen", true).Error; err != nil {
+		return &utils.ServiceError{
+			StatusCode: http.StatusInternalServerError,
+			Message:    "Failed to update is_seen status",
+		}
+	}
+
 	return nil
 }
