@@ -86,3 +86,10 @@ SELECT
     LEFT JOIN categories ON categories.id = post_categories.category_id
     LEFT JOIN media ON media.post_id = posts.id WHERE posts.id = '6' GROUP BY `posts`.`id`
 
+SELECT * FROM profiles;
+SELECT `profile_pic` FROM `profiles` WHERE user_id = 10;
+SELECT * FROM notifications;
+UPDATE notifications SET noti_type = "personal_post";
+SELECT *,
+       COUNT(notifications.id) OVER() AS total_count
+FROM `notifications` WHERE LOWER(notifications.message) LIKE LOWER('%%') AND receiver_id = 5 ORDER BY notifications.created_at desc LIMIT 10;

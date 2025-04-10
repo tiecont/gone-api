@@ -16,6 +16,7 @@ func List(c *gin.Context) {
 		SortBy       string `json:"sort_by"`
 		SearchValue  string `json:"search_value"`
 		IsSeen       bool   `json:"is_seen"`
+		All          bool   `json:"all"`
 	}
 	bindErr := utils.BindJson(c, &request)
 	if bindErr != nil {
@@ -29,7 +30,7 @@ func List(c *gin.Context) {
 		c.JSON(getUserErr.StatusCode, gin.H{"error": getUserErr.Message})
 		return
 	}
-	response, err := services.GetNotificationsByUserID(currentUser.ID, request.CurrentPage, request.ItemsPerPage, request.OrderBy, request.SortBy, request.SearchValue, request.IsSeen)
+	response, err := services.GetNotificationsByUserID(currentUser.ID, request.CurrentPage, request.ItemsPerPage, request.OrderBy, request.SortBy, request.SearchValue, request.IsSeen, request.All)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

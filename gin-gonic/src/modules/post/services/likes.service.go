@@ -93,7 +93,8 @@ func Like(userID, postID uint) (int64, *utils.ServiceError) {
 	if postOwner != userID {
 		// 3. Send notification to the post owner
 		message := fmt.Sprintf("%s just liked your post", username)
-		sendNotiErr := services.NotificationHandler(userID, postOwner, message)
+		noti_type := "personal_post"
+		sendNotiErr := services.NotificationHandler(userID, postOwner, message, noti_type)
 		if sendNotiErr != nil {
 			log.Printf("Failed to send notification: %v", sendNotiErr)
 		}

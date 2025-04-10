@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-func NotificationHandler(senderID, receiverID uint, message string) *utils.ServiceError {
+func NotificationHandler(senderID, receiverID uint, message, noti_type string) *utils.ServiceError {
 	db := config.DB
 
 	// Prepare for new notification record
@@ -19,6 +19,7 @@ func NotificationHandler(senderID, receiverID uint, message string) *utils.Servi
 		SenderID:   senderID,
 		ReceiverID: receiverID,
 		Message:    message,
+		NotiType:   noti_type,
 	}
 
 	// Inserting record
@@ -30,7 +31,7 @@ func NotificationHandler(senderID, receiverID uint, message string) *utils.Servi
 	}
 	// Prepare message
 	content := services.WebSocketMessage{
-		Type:    "notice",
+		Type:    newNoti.NotiType,
 		Message: newNoti.Message,
 	}
 	// Send Notification on Socket
@@ -41,12 +42,12 @@ func NotificationHandler(senderID, receiverID uint, message string) *utils.Servi
 	return nil
 }
 
-func GetNotificationsByUserID(userID uint, currentPage, itemsPerPage int, orderBy, sortBy, searchValue string, isSeen bool) (map[string]interface{}, *utils.ServiceError) {
+func GetNotificationsByUserID(userID uint, currentPage, itemsPerPage int, orderBy, sortBy, searchValue string, isSeen bool, all bool) (map[string]interface{}, *utils.ServiceError) {
 	// Prepare Pagination
 	offsetData := utils.CalculateOffset(currentPage, itemsPerPage, sortBy, orderBy)
 
 	// Get Rows
-	rows, err := functions.ListNotifications(searchValue, offsetData.OrderBy, offsetData.SortBy, offsetData.Offset, itemsPerPage, isSeen, userID)
+	rows, err := functions.ListNotifications(searchValue, offsetData.OrderBy, offsetData.SortBy, offsetData.Offset, itemsPerPage, isSeen, userID, all)
 	if err != nil {
 		return nil, err
 	}
@@ -62,11 +63,12 @@ func GetNotificationsByUserID(userID uint, currentPage, itemsPerPage int, orderB
 			message                              sql.NullString
 			createdAt, updatedAt                 time.Time
 			isSeen                               sql.NullBool
+			notiType                             sql.NullString
 			totalCount                           int
 		)
 		if err := rows.Scan(
 			&notificationID, &senderID, &receiverID,
-			&message, &createdAt, &updatedAt, &isSeen,
+			&message, &createdAt, &updatedAt, &isSeen, &notiType,
 			&totalCount); err != nil {
 			return nil, &utils.ServiceError{
 				StatusCode: http.StatusInternalServerError,
@@ -79,11 +81,12 @@ func GetNotificationsByUserID(userID uint, currentPage, itemsPerPage int, orderB
 		if !exists {
 			notifications = map[string]interface{}{
 				"id":         notificationID,
-				"senderID":   senderID,
-				"receiverID": receiverID,
+				"sender_id":  senderID,
 				"message":    message.String,
-				"createdAt":  createdAt.String(),
-				"updatedAt":  updatedAt.String(),
+				"read":       isSeen.Bool,
+				"type":       notiType.String,
+				"created_at": createdAt.String(),
+				"updated_at": updatedAt.String(),
 			}
 			notificationMap[notificationID] = notifications
 		}
@@ -116,7 +119,7 @@ func UpdateIsSeen(notificationID, userID uint) *utils.ServiceError {
 	db := config.DB
 
 	if err := db.Model(&models.Notification{}).
-		Where("id = ? AND receiverID = ?", notificationID, userID).
+		Where("id = ? AND receiver_id = ?", notificationID, userID).
 		Update("is_seen", true).Error; err != nil {
 		return &utils.ServiceError{
 			StatusCode: http.StatusInternalServerError,
@@ -131,7 +134,7 @@ func UpdateIsSeenForAllNotificationByUserID(userID uint) *utils.ServiceError {
 	db := config.DB
 
 	if err := db.Model(&models.Notification{}).
-		Where("receiverID = ? AND is_seen = false", userID).
+		Where("receiver_id = ? AND is_seen = false", userID).
 		Update("is_seen", true).Error; err != nil {
 		return &utils.ServiceError{
 			StatusCode: http.StatusInternalServerError,

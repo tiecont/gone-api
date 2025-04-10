@@ -11,6 +11,7 @@ import (
 	RefreshTokens "gone-be/src/modules/key_token/refresh_token/models"
 	Profiles "gone-be/src/modules/profile/models"
 	Users "gone-be/src/modules/user/models"
+	"gone-be/src/utils"
 	"gorm.io/gorm"
 	"io"
 	"io/ioutil"
@@ -75,8 +76,9 @@ func RegisterUser(user Users.User) (map[string]interface{}, error) {
 
 	// Step 5: Create a default profile for the new user
 	defaultProfile := Profiles.Profile{
-		UserID:   newUser.ID,
-		Birthday: nil, // Default birthday (not set)
+		UserID:     newUser.ID,
+		ProfilePic: "/default-avatar.png",
+		Birthday:   nil, // Default birthday (not set)
 	}
 
 	// Step 6: Save the profile to the database
@@ -541,4 +543,40 @@ func ChangePassword(oldPassword, newPassword, userID string) (int, error) {
 
 	// Step 5: Return success response
 	return http.StatusOK, nil
+}
+
+// GetUserImageByID is a function to get user avatar by ID, this function will open for all clients
+// GetUserImageByID retrieves a user's profile picture URL by their user ID
+func GetUserImageByID(userID uint) (string, *utils.ServiceError) {
+	if userID == 0 {
+		return "", &utils.ServiceError{
+			StatusCode: http.StatusBadRequest,
+			Message:    "invalid user ID",
+		}
+	}
+
+	var userAvatar string
+	err := config.DB.
+		Model(&Profiles.Profile{}).
+		Select("profile_pic").
+		Where("user_id = ?", userID).
+		Scan(&userAvatar).
+		Error
+
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return "", &utils.ServiceError{
+				StatusCode: http.StatusNotFound,
+				Message:    "user profile not found",
+			}
+		}
+
+		return "", &utils.ServiceError{
+			StatusCode: http.StatusInternalServerError,
+			Message:    fmt.Sprintf("failed to get user image: %v", err),
+		}
+	}
+
+	// Return empty string if no profile picture is set
+	return userAvatar, nil
 }

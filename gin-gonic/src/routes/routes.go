@@ -36,6 +36,11 @@ func RegisterRoutes(router *gin.Engine) {
 	}
 
 	// Main Application Routes
+	// User Group APIs
+	userRoutes := api.Group("/users")
+	{
+		userRoutes.POST("avatar", authMiddleware(), UserControllers.GetUserAvatar)
+	}
 	// Post Group APIs
 	postsRoutes := api.Group("/posts")
 	{
