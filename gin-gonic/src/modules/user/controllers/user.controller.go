@@ -4,6 +4,7 @@ import (
 	"bytes"
 	model "gone-be/src/modules/user/models"
 	"gone-be/src/modules/user/services"
+	"gone-be/src/utils"
 	"io"
 	"log"
 	"net/http"
@@ -355,5 +356,34 @@ func ChangePassword(c *gin.Context) {
 			"code":    status,
 			"message": "Successfully changed password",
 		},
+	})
+}
+
+func GetUserAvatar(c *gin.Context) {
+	var request struct {
+		UserID uint `json:"user_id"`
+	}
+	bindErr := utils.BindJson(c, &request)
+	if bindErr != nil {
+		c.JSON(bindErr.StatusCode, gin.H{"error": bindErr.Message})
+		return
+	}
+
+	avatarUser, err := services.GetUserImageByID(request.UserID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status": gin.H{
+				"code":    http.StatusInternalServerError,
+				"message": err.Message,
+			},
+		})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"status": gin.H{
+			"code":    http.StatusOK,
+			"message": "Successfully get user avatar",
+		},
+		"data": avatarUser,
 	})
 }

@@ -11,6 +11,7 @@ import (
 	RefreshTokens "gone-be/src/modules/key_token/refresh_token/models"
 	Profiles "gone-be/src/modules/profile/models"
 	Users "gone-be/src/modules/user/models"
+	"gone-be/src/utils"
 	"gorm.io/gorm"
 	"io"
 	"io/ioutil"
@@ -75,8 +76,9 @@ func RegisterUser(user Users.User) (map[string]interface{}, error) {
 
 	// Step 5: Create a default profile for the new user
 	defaultProfile := Profiles.Profile{
-		UserID:   newUser.ID,
-		Birthday: nil, // Default birthday (not set)
+		UserID:     newUser.ID,
+		ProfilePic: "/default-avatar.png",
+		Birthday:   nil, // Default birthday (not set)
 	}
 
 	// Step 6: Save the profile to the database
@@ -116,31 +118,44 @@ func RegisterUser(user Users.User) (map[string]interface{}, error) {
 func LoginUser(email, phoneNumber, password, username string) (map[string]interface{}, int, error) {
 	db := config.DB
 
-	// Step 1: Check if the user exists
+	// Step 1: Xác định thông tin đầu vào để truy vấn
 	var existingUser Users.User
-	if err := db.Where("status = true AND (email = ? OR phone_number = ? OR username = ?)", email, phoneNumber, username).First(&existingUser).Error; err != nil {
+	var err error
+
+	switch {
+	case email != "":
+		err = db.Where("status = true AND email = ?", email).First(&existingUser).Error
+	case phoneNumber != "":
+		err = db.Where("status = true AND phone_number = ?", phoneNumber).First(&existingUser).Error
+	case username != "":
+		err = db.Where("status = true AND username = ?", username).First(&existingUser).Error
+	default:
+		return nil, http.StatusBadRequest, errors.New("email, phone number, or username is required")
+	}
+
+	if err != nil {
 		return nil, http.StatusUnauthorized, errors.New("invalid user")
 	}
 
-	// Step 2: Validate the password
+	// Step 2: Kiểm tra mật khẩu
 	if err := bcrypt.CompareHashAndPassword([]byte(existingUser.Password), []byte(password)); err != nil {
 		return nil, http.StatusUnauthorized, errors.New("invalid credentials")
 	}
 
-	// Step 3: Generate a 6-digit verification code
+	// Step 3: Tạo mã xác minh 6 chữ số
 	verificationCode := generateVerificationCode()
 
-	// Step 4: Save the verification code to the database
+	// Step 4: Lưu mã xác minh
 	if err := saveVerificationCode(existingUser.Email, verificationCode); err != nil {
 		return nil, http.StatusInternalServerError, errors.New("failed to save verification code")
 	}
 
-	// Step 5: Send the verification code via email
+	// Step 5: Gửi mã xác minh qua email
 	if err := sendVerificationEmail(existingUser.Email, verificationCode); err != nil {
 		return nil, http.StatusInternalServerError, errors.New("failed to send verification email")
 	}
 
-	// Step 6: Return nil on success
+	// Step 6: Trả về thành công
 	return nil, http.StatusOK, nil
 }
 
@@ -528,4 +543,40 @@ func ChangePassword(oldPassword, newPassword, userID string) (int, error) {
 
 	// Step 5: Return success response
 	return http.StatusOK, nil
+}
+
+// GetUserImageByID is a function to get user avatar by ID, this function will open for all clients
+// GetUserImageByID retrieves a user's profile picture URL by their user ID
+func GetUserImageByID(userID uint) (string, *utils.ServiceError) {
+	if userID == 0 {
+		return "", &utils.ServiceError{
+			StatusCode: http.StatusBadRequest,
+			Message:    "invalid user ID",
+		}
+	}
+
+	var userAvatar string
+	err := config.DB.
+		Model(&Profiles.Profile{}).
+		Select("profile_pic").
+		Where("user_id = ?", userID).
+		Scan(&userAvatar).
+		Error
+
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return "", &utils.ServiceError{
+				StatusCode: http.StatusNotFound,
+				Message:    "user profile not found",
+			}
+		}
+
+		return "", &utils.ServiceError{
+			StatusCode: http.StatusInternalServerError,
+			Message:    fmt.Sprintf("failed to get user image: %v", err),
+		}
+	}
+
+	// Return empty string if no profile picture is set
+	return userAvatar, nil
 }

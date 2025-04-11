@@ -1,11 +1,15 @@
 package services
 
 import (
+	"fmt"
 	"gone-be/src/config"
 	"gone-be/src/functions"
+	"gone-be/src/modules/notification/services"
 	"gone-be/src/modules/post/models"
+	Users "gone-be/src/modules/user/models"
 	"gone-be/src/utils"
 	"gorm.io/gorm"
+	"log"
 	"net/http"
 )
 
@@ -53,6 +57,46 @@ func Like(userID, postID uint) (int64, *utils.ServiceError) {
 		return counts, &utils.ServiceError{
 			StatusCode: http.StatusInternalServerError,
 			Message:    "Failed to like the post",
+		}
+	}
+
+	// Send Notification
+
+	// 1. Get username of the user who liked the post
+	var username string
+	usernameErr := db.Model(&Users.User{}).
+		Select("username").
+		Where("id = ?", userID).
+		Scan(&username).Error
+	if usernameErr != nil {
+		log.Printf("Failed to get username for userID %d: %v", userID, usernameErr)
+		return counts, &utils.ServiceError{
+			StatusCode: http.StatusBadRequest,
+			Message:    fmt.Sprintf("Failed to get username for userID %d: %v", userID, usernameErr),
+		}
+	}
+
+	// 2. Get owner of the post
+	var postOwner uint
+	selectOwnerErr := db.Model(&models.Post{}).
+		Select("user_id").
+		Where("id = ?", postID).
+		Scan(&postOwner).Error
+	if selectOwnerErr != nil {
+		log.Printf("Failed to get post owner for postID %d: %v", postID, selectOwnerErr)
+		return counts, &utils.ServiceError{
+			StatusCode: http.StatusBadRequest,
+			Message:    fmt.Sprintf("Failed to get post owner for postID %d: %v", postID, selectOwnerErr),
+		}
+	}
+
+	if postOwner != userID {
+		// 3. Send notification to the post owner
+		message := fmt.Sprintf("%s just liked your post", username)
+		noti_type := "personal_post"
+		sendNotiErr := services.NotificationHandler(userID, postOwner, message, noti_type)
+		if sendNotiErr != nil {
+			log.Printf("Failed to send notification: %v", sendNotiErr)
 		}
 	}
 

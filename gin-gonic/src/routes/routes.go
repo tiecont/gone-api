@@ -2,6 +2,7 @@ package routes
 
 import (
 	"gone-be/src/middlewares"
+	NotificationControllers "gone-be/src/modules/notification/controllers"
 	PermissionController "gone-be/src/modules/permission/controllers"
 	PostControllers "gone-be/src/modules/post/controllers"
 	RoleControllers "gone-be/src/modules/role/controllers"
@@ -35,6 +36,11 @@ func RegisterRoutes(router *gin.Engine) {
 	}
 
 	// Main Application Routes
+	// User Group APIs
+	userRoutes := api.Group("/users")
+	{
+		userRoutes.POST("avatar", authMiddleware(), UserControllers.GetUserAvatar)
+	}
 	// Post Group APIs
 	postsRoutes := api.Group("/posts")
 	{
@@ -62,7 +68,15 @@ func RegisterRoutes(router *gin.Engine) {
 	// Likes Group APIs
 	likesRoutes := api.Group("/likes")
 	{
-		likesRoutes.POST("", authMiddleware(), PostControllers.Like) // 21
-		likesRoutes.POST("/undo", authMiddleware(), PostControllers.DisLike)
+		likesRoutes.POST("", authMiddleware(), PostControllers.Like)         // 21
+		likesRoutes.POST("/undo", authMiddleware(), PostControllers.DisLike) // 22
+	}
+
+	// Notifications Group APIs
+	notificationsRoutes := api.Group("/notifications")
+	{
+		notificationsRoutes.POST("", authMiddleware(), NotificationControllers.List)
+		notificationsRoutes.POST("single-seen", authMiddleware(), NotificationControllers.UpdateSeen)
+		notificationsRoutes.POST("all-seen", authMiddleware(), NotificationControllers.UpdateSeenWithUserID)
 	}
 }
