@@ -52,6 +52,30 @@ func ConnectDatabase() *gorm.DB {
 	return DB
 }
 
+func CheckConnection() bool {
+	if DB == nil {
+		return false
+	}
+
+	sqlDB, err := DB.DB()
+	if err != nil {
+		log.Printf("Failed to get generic database object: %v", err)
+		return false
+	}
+
+	if err := sqlDB.Ping(); err != nil {
+		log.Printf("Database ping failed: %v", err)
+		return false
+	}
+
+	var result int
+	if err := DB.Raw("SELECT 1").Scan(&result).Error; err != nil {
+		log.Printf("Test query failed: %v", err)
+		return false
+	}
+	return result == 1
+}
+
 // runMigrations runs all model migrations.
 func runMigrations(db *gorm.DB) error {
 	migrations := []func(*gorm.DB) error{

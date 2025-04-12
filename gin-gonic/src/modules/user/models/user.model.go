@@ -12,7 +12,7 @@ type User struct {
 	ID          uint       `gorm:"primaryKey;autoIncrement"`
 	Username    string     `gorm:"size:255;not null;"`
 	Email       string     `gorm:"size:255;not null;unique"`
-	PhoneNumber int        `gorm:"size:11;default:null;unique"`
+	PhoneNumber uint64     `gorm:"default:null;unique"`
 	GoogleID    string     `gorm:"size:255;default:null;unique"`
 	TwitterID   string     `gorm:"size:255;default:null;unique"`
 	Password    string     `gorm:"size:255;default:null"`

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"gone-be/src/config"
 	"gone-be/src/routes"
 	"gone-be/src/services"
@@ -14,9 +15,20 @@ import (
 )
 
 func main() {
-	// Load environment variables from .env file
-	if err := godotenv.Load(); err != nil {
-		log.Fatalf("Error loading .env file: %v", err)
+	env := os.Getenv("NODE_ENV")
+	if env == "development" {
+		// Load environment variables from .env file
+		if err := godotenv.Load(); err != nil {
+			log.Fatalf("Error loading .env file: %v", err)
+		}
+	}
+	host := os.Getenv("HOST")
+	port := os.Getenv("APP_PORT")
+	if host == "" {
+		host = "0.0.0.0" // Default
+	}
+	if port == "" {
+		port = "2000" // Default
 	}
 	// Setup Gin router
 	router := gin.Default()
@@ -43,11 +55,8 @@ func main() {
 	routes.RegisterRoutes(router)
 
 	// Start API and WebSocket server
-	port := os.Getenv("APP_PORT")
-	if port == "" {
-		port = "8080" // Default port
-	}
-	if err := router.Run(":" + port); err != nil {
+	addr := fmt.Sprintf("%s:%s", host, port)
+	if err := router.Run(addr); err != nil {
 		log.Fatalf("Could not start server: %v\n", err)
 	}
 }
