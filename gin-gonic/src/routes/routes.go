@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"github.com/gin-gonic/gin"
 	"gone-be/src/config"
 	"gone-be/src/middlewares"
 	NotificationControllers "gone-be/src/modules/notification/controllers"
@@ -10,8 +11,6 @@ import (
 	UserControllers "gone-be/src/modules/user/controllers"
 	"gone-be/src/utils"
 	"net/http"
-
-	"github.com/gin-gonic/gin"
 )
 
 // RegisterRoutes initializes all API routes
@@ -57,6 +56,7 @@ func RegisterRoutes(router *gin.Engine) {
 		authRoutes.POST("forgot-password", UserControllers.ForgotPassword)                                                        // 8
 		authRoutes.POST("confirm-forgot-password", UserControllers.VerifyCode)                                                    // 9
 		authRoutes.POST("change-password", UserControllers.ChangePassword)                                                        // 10
+		authRoutes.POST("reset-password", UserControllers.RenewPassword)
 	}
 
 	// Main Application Routes

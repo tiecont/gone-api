@@ -113,7 +113,7 @@ func LoginUser(c *gin.Context) {
 	}
 
 	// Call the LoginUser service
-	response, status, err := services.LoginUser(request.Email, request.PhoneNumber, request.Password, request.Username)
+	email, status, err := services.LoginUser(request.Email, request.PhoneNumber, request.Password, request.Username)
 	if err != nil {
 		c.JSON(status, gin.H{
 			"status": gin.H{
@@ -130,7 +130,7 @@ func LoginUser(c *gin.Context) {
 			"code":    http.StatusOK,
 			"message": "Verification code sent to your email. Please verify to process.",
 		},
-		"data": response,
+		"data": email,
 	})
 }
 
@@ -319,6 +319,42 @@ func ForgotPassword(c *gin.Context) {
 		"status": gin.H{
 			"code":    http.StatusOK,
 			"message": "Verification email had been sent",
+		},
+	})
+}
+
+func RenewPassword(c *gin.Context) {
+	body, _ := io.ReadAll(c.Request.Body)
+	c.Request.Body = io.NopCloser(bytes.NewBuffer(body))
+	var request struct {
+		OldPassword string `json:"old_password"`
+		NewPassword string `json:"new_password"`
+		UserID      uint   `json:"user_id"`
+	}
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status": gin.H{
+				"code":    http.StatusBadRequest,
+				"message": "Invalid input",
+			},
+		})
+		return
+	}
+	status, err := services.RenewPassword(request.NewPassword, strconv.Itoa(int(request.UserID)))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status": gin.H{
+				"code":    status,
+				"message": "Failed to change password",
+			},
+		})
+		return
+	}
+	// Return results
+	c.JSON(http.StatusOK, gin.H{
+		"status": gin.H{
+			"code":    status,
+			"message": "Successfully changed password",
 		},
 	})
 }

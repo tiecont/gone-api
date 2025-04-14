@@ -115,7 +115,7 @@ func RegisterUser(user Users.User) (map[string]interface{}, error) {
 }
 
 // LoginUser is the function to help user login and return the tokens
-func LoginUser(email, phoneNumber, password, username string) (map[string]interface{}, int, error) {
+func LoginUser(email, phoneNumber, password, username string) (string, int, error) {
 	db := config.DB
 
 	// Step 1: Xác định thông tin đầu vào để truy vấn
@@ -130,16 +130,16 @@ func LoginUser(email, phoneNumber, password, username string) (map[string]interf
 	case username != "":
 		err = db.Where("status = true AND username = ?", username).First(&existingUser).Error
 	default:
-		return nil, http.StatusBadRequest, errors.New("email, phone number, or username is required")
+		return "", http.StatusBadRequest, errors.New("email, phone number, or username is required")
 	}
 
 	if err != nil {
-		return nil, http.StatusUnauthorized, errors.New("invalid user")
+		return "", http.StatusUnauthorized, errors.New("invalid user")
 	}
 
 	// Step 2: Kiểm tra mật khẩu
 	if err := bcrypt.CompareHashAndPassword([]byte(existingUser.Password), []byte(password)); err != nil {
-		return nil, http.StatusUnauthorized, errors.New("invalid credentials")
+		return "", http.StatusUnauthorized, errors.New("invalid credentials")
 	}
 
 	// Step 3: Tạo mã xác minh 6 chữ số
@@ -147,16 +147,16 @@ func LoginUser(email, phoneNumber, password, username string) (map[string]interf
 
 	// Step 4: Lưu mã xác minh
 	if err := saveVerificationCode(existingUser.Email, verificationCode); err != nil {
-		return nil, http.StatusInternalServerError, errors.New("failed to save verification code")
+		return "", http.StatusInternalServerError, errors.New("failed to save verification code")
 	}
 
 	// Step 5: Gửi mã xác minh qua email
 	if err := sendVerificationEmail(existingUser.Email, verificationCode); err != nil {
-		return nil, http.StatusInternalServerError, errors.New("failed to send verification email")
+		return "", http.StatusInternalServerError, errors.New(err.Error())
 	}
 
 	// Step 6: Trả về thành công
-	return nil, http.StatusOK, nil
+	return existingUser.Email, http.StatusOK, nil
 }
 
 // LoginGoogle is the function to login by google service and return the tokens
@@ -500,6 +500,42 @@ func ForgotPassword(email string) (int, error) {
 		return http.StatusInternalServerError, errors.New("failed to send verification email")
 	}
 
+	return http.StatusOK, nil
+}
+
+// RenewPassword is the function to change the password follow by user
+func RenewPassword(newPassword, userID string) (int, error) {
+	// Start a database transaction
+	tx := config.DB.Begin()
+	var user Users.User
+
+	// Step 1: Check if the user exists
+	if err := tx.Where("id = ?", userID).First(&user).Error; err != nil {
+		tx.Rollback()
+		return http.StatusNotFound, errors.New("user not found")
+	}
+
+	// Step 2: Hash the new password
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		tx.Rollback()
+		return http.StatusInternalServerError, errors.New("failed to hash new password")
+	}
+
+	// Step 4: Update the password in the database
+	user.Password = string(hashedPassword)
+	if err := tx.Save(&user).Error; err != nil {
+		tx.Rollback()
+		return http.StatusInternalServerError, errors.New("failed to save new password")
+	}
+
+	// Commit the transaction
+	if err := tx.Commit().Error; err != nil {
+		tx.Rollback()
+		return http.StatusInternalServerError, errors.New("failed to commit transaction")
+	}
+
+	// Step 5: Return success response
 	return http.StatusOK, nil
 }
 

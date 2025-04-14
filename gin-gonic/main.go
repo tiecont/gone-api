@@ -15,20 +15,22 @@ import (
 )
 
 func main() {
-	env := os.Getenv("NODE_ENV")
-	if env == "development" {
-		// Load environment variables from .env file
-		if err := godotenv.Load(); err != nil {
-			log.Fatalf("Error loading .env file: %v", err)
-		}
+	if err := godotenv.Load(".env"); err != nil {
+		log.Printf("⚠️ Could not load .env file: %v", err)
+	} else {
+		log.Println("✅ .env file loaded successfully")
 	}
+
+	env := os.Getenv("NODE_ENV")
+	log.Printf("NODE_ENV = %s", env)
+
 	host := os.Getenv("HOST")
 	port := os.Getenv("APP_PORT")
 	if host == "" {
-		host = "0.0.0.0" // Default
+		host = "0.0.0.0"
 	}
 	if port == "" {
-		port = "2000" // Default
+		port = "2000"
 	}
 	// Setup Gin router
 	router := gin.Default()
