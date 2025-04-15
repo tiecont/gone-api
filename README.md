@@ -145,9 +145,12 @@ helm pull ingress-nginx/ingress-nginx
 tar -xzf ingress-nginx-*.tgz
 vi ingress-nginx/values.yaml
 # Edit type: LoadBalancer => NodePort
-# Set nodePort http: 30080, https: 30443
+# Set nodePort http: 30080, https: 30443, tcp: 2000 -> 32000
 kubectl create ns ingress-nginx
 helm -n ingress-nginx install ingress-nginx -f ingress-nginx/values.yaml ingress-nginx
+# Patch open port for backend server
+kubectl patch svc ingress-nginx-controller -n ingress-nginx --type=json \
+  -p='[{"op":"add","path":"/spec/ports/-","value":{"name":"tcp-2000","port":2000,"nodePort":32000,"protocol":"TCP"}}]'
 ```
 
 ## Monitoring: Metrics & Prometheus Stack
@@ -165,25 +168,46 @@ helm install prometheus prometheus-community/kube-prometheus-stack --namespace m
 ## Setup Nginx LoadBalancer
 ```bash
 sudo apt install nginx
-sudo nano /etc/nginx/conf.d/gone
-
+# Change port default to 9999 on file /etc/nginx/sites-available/default
+sudo nano /etc/nginx/conf.d/gone.conf
+```
+```nginx
 # Add the following:
-upstream my_servers {
+upstream frontend_servers {
     server 192.168.100.110:30080;
     server 192.168.100.111:30080;
     server 192.168.100.112:30080;
 }
 
+upstream backend_servers {
+    server 192.168.100.110:32000;
+    server 192.168.100.111:32000;
+    server 192.168.100.112:32000;
+}
+
 server {
     listen 80;
 
+    # Frontend (Next.js)
     location / {
-        proxy_pass http://my_servers;
-        proxy_redirect off;
+        proxy_pass http://frontend_servers;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Backend (Golang)
+    location /api {
+        proxy_pass http://backend_servers;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Tối ưu cho API
+        proxy_read_timeout 300s;
+        proxy_connect_timeout 75s;
     }
 }
 ```
@@ -194,6 +218,41 @@ server {
 ```bash
 sudo apt update && sudo apt upgrade -y
 sudo apt install mysql-server -y
+```
+## Setup Database Config
+```bash
+sudo nano /etc/mysql/my.cnf
+```
+```
+# Add Following Body
+[mysqld]
+# Memory Settings (Optimized for 4GB RAM)
+innodb_buffer_pool_size = 1G
+innodb_log_file_size = 256M
+key_buffer_size = 64M
+tmp_table_size = 32M
+max_heap_table_size = 32M
+
+# Connection Settings
+max_connections = 50
+thread_cache_size = 8
+wait_timeout = 60
+interactive_timeout = 60
+
+# Crash Protection
+innodb_flush_log_at_trx_commit = 2
+innodb_io_capacity = 200
+innodb_io_capacity_max = 400
+
+# Security
+skip_name_resolve = ON
+local_infile = OFF
+
+# Monitoring
+performance_schema = ON
+```
+## Reset Mysql
+```bash
 sudo systemctl start mysql
 sudo systemctl enable mysql
 sudo mysql_secure_installation
@@ -223,12 +282,34 @@ sudo systemctl restart mysql
 
 ---
 
-## DockerHub Token
-```
-dckr_pat_8NEV8QTh3UKrcBYPKYSNArElSA0
+## Docker Build Command
+```bash
+docker build -t gone-frontend:v1 \
+--build-arg NEXT_PUBLIC_API_BASE_URL=http://api.gone-onpre.tiesnode.vn/api \
+--build-arg NEXT_PUBLIC_SERVER_URL=http://api.gone-onpre.tiesnode.vn \
+--build-arg NEXT_PUBLIC_APP_URL=http://gone-onpre.tiesnode.vn \
+--build-arg NEXTAUTH_URL=http://gone-onpre.tiesnode.vn/login \
+--build-arg HOST=0.0.0.0 --build-arg PORT=3000  .
 ```
 
 ---
 
+## Create Docker Secret
+```bash
+echo -n '{"auths":{"https://index.docker.io/v1/":{"username":"your-username","password":"your-docker-token","email":"your-email","auth":
+"'"$(echo -n 'your-username:your-docker-token' | base64)"'"}}}' | base64 -w 0
+```
+
+## Docker Secret Yaml
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: docker-secret
+  namespace: gone-app
+type: kubernetes.io/dockerconfigjson
+data:
+  .dockerconfigjson: <BASE64-FROM-ABOVE>
+```
 Happy Clustering & Shipping 🚀
 
