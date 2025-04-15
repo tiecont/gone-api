@@ -26,6 +26,10 @@ INSERT INTO roles (id, name, created_at, updated_at)
 VALUES (1, 'admin', now(), now()),
        (2, 'user', now(), now());
 
+-- (Option) CREATE AN ADMIN
+INSERT INTO users (id, username, email, phone_number, google_id, twitter_id, password, status, role_id, created_at, updated_at)
+VALUES (1, 'admin', 'ties.node@outlook.com', 773598329, null, null,
+        '$2a$10$WnZTtDN5q3EUeBUKBXkY4uPL77AsMESeRgS6wdoq2UgXe/zSWYMnC', 1, 1, now(), now());
 -- Try to log in or register at frontend, role_id need set to 1
 UPDATE users SET role_id = 2 WHERE id = 1;
 INSERT INTO permissions (id, name, created_at, updated_at)
@@ -53,8 +57,6 @@ SELECT * FROM permissions;
 SELECT * FROM media;
 SELECT * FROM posts WHERE id = 2;
 
-SELECT * FROM `users` WHERE status = true AND (email = 'phamson1968nt@gmail.com' OR phone_number = '' OR username = '') LIMIT 1;
-SELECT * FROM `users` WHERE status = true AND email ='phamson1968nt@gmail.com';
 SELECT posts.id, posts.content, posts.created_at, posts.updated_at,
 media.id AS media_id, media.path AS media_path, media.type AS media_type, media.status AS media_status,
        categories.id AS categories_id, categories.name AS categories_name

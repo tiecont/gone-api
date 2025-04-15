@@ -1,6 +1,8 @@
 package routes
 
 import (
+	"github.com/gin-gonic/gin"
+	"gone-be/src/config"
 	"gone-be/src/middlewares"
 	NotificationControllers "gone-be/src/modules/notification/controllers"
 	PermissionController "gone-be/src/modules/permission/controllers"
@@ -8,8 +10,7 @@ import (
 	RoleControllers "gone-be/src/modules/role/controllers"
 	UserControllers "gone-be/src/modules/user/controllers"
 	"gone-be/src/utils"
-
-	"github.com/gin-gonic/gin"
+	"net/http"
 )
 
 // RegisterRoutes initializes all API routes
@@ -20,6 +21,28 @@ func RegisterRoutes(router *gin.Engine) {
 	authMiddleware := middlewares.AuthMiddleware
 	authzMiddleware := middlewares.Authorization
 	needPermission := utils.Permissions
+	// Hello World
+	api.GET("/hello", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"status": gin.H{
+				"code":    http.StatusOK,
+				"message": "Hello world",
+			},
+		})
+	})
+
+	router.GET("/healthz", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
+
+	router.GET("/readyz", func(c *gin.Context) {
+		if config.CheckConnection() {
+			c.JSON(http.StatusOK, gin.H{"status": "ready"})
+		} else {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"status": "unavailable"})
+		}
+	})
+
 	// Authentication Routes
 	authRoutes := api.Group("/auth")
 	{
@@ -33,6 +56,7 @@ func RegisterRoutes(router *gin.Engine) {
 		authRoutes.POST("forgot-password", UserControllers.ForgotPassword)                                                        // 8
 		authRoutes.POST("confirm-forgot-password", UserControllers.VerifyCode)                                                    // 9
 		authRoutes.POST("change-password", UserControllers.ChangePassword)                                                        // 10
+		authRoutes.POST("reset-password", UserControllers.RenewPassword)
 	}
 
 	// Main Application Routes
