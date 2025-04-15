@@ -287,9 +287,9 @@ sudo systemctl restart mysql
 docker build -t gone-frontend:v1 \
 --build-arg NEXT_PUBLIC_API_BASE_URL=http://api.gone-onpre.tiesnode.vn/api \
 --build-arg NEXT_PUBLIC_SERVER_URL=http://api.gone-onpre.tiesnode.vn \
---build-arg NEXT_PUBLIC_APP_URL=http://gone-onpre.tiesnode.vn \
---build-arg NEXTAUTH_URL=http://gone-onpre.tiesnode.vn/login \
---build-arg HOST=0.0.0.0 --build-arg PORT=3000  .
+--build-arg NEXT_PUBLIC_APP_URL=https://charlotte.io.vn \
+--build-arg NEXTAUTH_URL=https://charlotte.io.vn \
+--build-arg NEXT_WS_URL=api.gone-onpre.tiesnode.vn .
 ```
 
 ---
@@ -312,4 +312,181 @@ data:
   .dockerconfigjson: <BASE64-FROM-ABOVE>
 ```
 Happy Clustering & Shipping 🚀
+
+# 🌐 Cloudflared Tunnel Service Setup
+
+This guide helps you set up a **Cloudflare Tunnel** as a systemd service to automatically start at boot, run in the background, and expose internal services (e.g., HTTP/HTTPS, Kubernetes Ingress, etc.) to the public via a Cloudflare-protected domain.
+
+---
+
+## 🛠️ Prerequisites
+
+- ✅ A domain managed by [Cloudflare](https://dash.cloudflare.com/)
+- ✅ Cloudflare account with Global API Key
+- ✅ A public hostname (e.g. `example.yourdomain.com`) configured on Cloudflare
+- ✅ A Linux server with sudo privileges
+
+---
+
+## 🚀 Step-by-Step Setup
+
+### 1. **Install Cloudflared**
+
+```bash
+wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
+sudo dpkg -i cloudflared-linux-amd64.deb
+```
+
+Verify:
+
+```bash
+cloudflared --version
+```
+
+---
+
+### 2. **Authenticate with Cloudflare**
+
+```bash
+cloudflared login
+```
+
+- This will open a browser.
+- Choose your domain and authorize.
+- Cloudflared will save the certificate to:
+
+  ```bash
+  ~/.cloudflared/cert.pem
+  ```
+
+---
+
+### 3. **Create a Tunnel**
+
+```bash
+cloudflared tunnel create gone-onpre-tunnel
+```
+
+Output example:
+
+```text
+Tunnel credentials written to /home/youruser/.cloudflared/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx.json
+```
+
+> This credential file is linked to your tunnel and should be kept secret.
+
+---
+
+### 4. **Create Tunnel Config File**
+
+Create the config file:
+
+```bash
+sudo mkdir -p /etc/cloudflared
+sudo nano /etc/cloudflared/config.yml
+```
+
+Example config (`/etc/cloudflared/config.yml`):
+
+```yaml
+tunnel: gone-onpre-tunnel
+credentials-file: /home/YOUR_USERNAME/.cloudflared/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx.json
+
+ingress:
+  - hostname: charlotte.io.vn
+    service: http://localhost:80
+    originRequest:
+      httpHostHeader: gone-onpre.tiesnode.vn
+  - service: http_status:404
+```
+
+> Replace `YOUR_USERNAME` and `localhost:3000` with appropriate values.
+
+---
+
+### 5. **Route DNS to Tunnel**
+
+```bash
+cloudflared tunnel route dns gone-onpre-tunnel charlotte.io.vn
+```
+
+This adds a CNAME DNS record in Cloudflare pointing your domain to the tunnel.
+
+---
+
+### 6. **Install and Enable the Systemd Service**
+
+```bash
+sudo cloudflared service install
+```
+
+Enable and start the service:
+
+```bash
+sudo systemctl enable cloudflared
+sudo systemctl start cloudflared
+```
+
+Check status:
+
+```bash
+sudo systemctl status cloudflared
+```
+
+You should see logs indicating a successful connection.
+
+---
+
+### 7. **Test the Tunnel**
+
+Try accessing your domain in a browser:
+
+```bash
+https://charlotte.io.vn
+```
+
+Or from the terminal:
+
+```bash
+curl -v https://charlotte.io.vn
+```
+
+---
+
+## 🧰 Useful Commands
+
+- View running tunnels:
+  ```bash
+  cloudflared tunnel list
+  ```
+
+- Check tunnel info:
+  ```bash
+  cloudflared tunnel info gone-onpre-tunnel
+  ```
+
+- View logs:
+  ```bash
+  journalctl -u cloudflared -f
+  ```
+
+- Restart service:
+  ```bash
+  sudo systemctl restart cloudflared
+  ```
+
+---
+
+## 🧱 Security Tips
+
+- Never expose your `.json` credentials file publicly.
+- Use HTTPS services with authentication.
+- Restrict IP/port access internally (only localhost if needed).
+
+---
+
+## ✅ Done!
+
+Your Cloudflare tunnel is now running **automatically as a systemd service**, resilient to reboots, and fully integrated with DNS.
+
 
